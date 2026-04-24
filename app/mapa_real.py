@@ -1,43 +1,29 @@
-import os
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
-
+import os
 
 def generar_pdf(nombre, apellidos, fecha_nacimiento, **kwargs):
-    try:
-        print("🔥 GENERADOR REAL EJECUTÁNDOSE")
+    
+    # Asegurar carpeta output
+    os.makedirs("output", exist_ok=True)
 
-        # 🔥 crear carpeta output si no existe
-        os.makedirs("output", exist_ok=True)
+    # Ruta del archivo
+    output_path = f"output/mapa_{nombre}_{apellidos}.pdf"
 
-        # 🔥 limpiar valores por seguridad
-        nombre = nombre or "SinNombre"
-        apellidos = apellidos or "SinApellido"
-        fecha_nacimiento = fecha_nacimiento or "SinFecha"
+    # Crear PDF
+    c = canvas.Canvas(output_path, pagesize=letter)
 
-        # 🔥 nombre del archivo
-        output_path = f"output/mapa_{nombre}_{apellidos}.pdf"
+    # Contenido (puedes mejorar esto luego)
+    c.drawString(100, 750, f"Mapa del Alma de {nombre} {apellidos}")
+    c.drawString(100, 720, f"Fecha de nacimiento: {fecha_nacimiento}")
 
-        print(f"📄 Generando PDF en: {output_path}")
+    # Guardar PDF
+    c.save()
 
-        # 🔥 crear PDF
-        c = canvas.Canvas(output_path, pagesize=letter)
+    print(f"✅ PDF REAL GENERADO EN: {output_path}")
 
-        c.setFont("Helvetica", 14)
-        c.drawString(100, 750, "MAPA DEL ALMA")
+    # 🔥 IMPORTANTE: devolver BYTES (no ruta)
+    with open(output_path, "rb") as f:
+        pdf_bytes = f.read()
 
-        c.setFont("Helvetica", 12)
-        c.drawString(100, 720, f"Nombre: {nombre} {apellidos}")
-        c.drawString(100, 700, f"Fecha de nacimiento: {fecha_nacimiento}")
-
-        c.drawString(100, 650, "Este es tu PDF REAL generado correctamente.")
-
-        c.save()
-
-        print("✅ PDF REAL GENERADO")
-
-        return output_path
-
-    except Exception as e:
-        print("❌ ERROR GENERANDO PDF REAL:", str(e))
-        raise
+    return pdf_bytes
