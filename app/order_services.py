@@ -125,12 +125,13 @@ def _escape_pdf_text(text: str) -> str:
     return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
 
-def _build_minimal_pdf(lines: list[str]) -> bytes:
+def _build_single_page_pdf(lines: list[str]) -> bytes:
     """
-    Genera un PDF simple válido (1 página) sin dependencias externas.
+    Genera un PDF válido de una página con contenido textual.
+    Este constructor es el generador principal del documento entregado al cliente.
     """
-    y_start = 760
-    line_ops = ["BT", "/F1 12 Tf", f"50 {y_start} Td"]
+    y_start = 780
+    line_ops = ["BT", "/F1 11 Tf", f"48 {y_start} Td"]
     for i, line in enumerate(lines):
         if i > 0:
             line_ops.append("T*")
@@ -182,7 +183,7 @@ def _pdf_output_paths(order_id: int) -> tuple[str, str]:
 
 def generar_pdf_automatico(order_id: int) -> str:
     """
-    Genera el PDF real (simple), lo sube a Cloudinary y devuelve su URL segura.
+    Genera el PDF real personalizado del pedido, lo sube a Cloudinary y devuelve su URL segura.
     """
     pedido = database.get_pedido_by_id(order_id)
     if pedido is None:
@@ -194,18 +195,35 @@ def generar_pdf_automatico(order_id: int) -> str:
 
     database.update_pedido_campos(order_id, estado=ESTADO_GENERANDO_PDF, clear_error=True)
     relative, absolute = _pdf_output_paths(order_id)
+    nombre = str(pedido["nombre"] or "").strip()
+    apellidos = str(pedido["apellidos"] or "").strip()
+    fecha_nacimiento = str(pedido["fecha_nacimiento"] or "").strip()
+    forma_trato = str(pedido["forma_trato"] or "").strip()
+    idioma = str(pedido["idioma"] or "").strip() if "idioma" in pedido.keys() else "es"
+
+    if not nombre:
+        raise RuntimeError(f"Pedido #{order_id} inválido: falta nombre para generar el PDF real.")
+    if not apellidos:
+        raise RuntimeError(f"Pedido #{order_id} inválido: falta apellidos para generar el PDF real.")
+
     lines = [
-        "Mapa del Alma",
+        "EL NOMBRE QUE ME HABITA",
+        "Mapa del Alma - Documento Personalizado",
         "",
-        f"Pedido #{pedido['id']}",
+        f"Pedido: #{pedido['id']}",
         f"Codigo de confirmacion: {database.codigo_confirmacion_pedido(int(pedido['id']))}",
-        f"Cliente: {pedido['nombre']} {pedido['apellidos'] or ''}".strip(),
-        f"Email: {pedido['email']}",
-        f"Fecha de creación: {pedido['created_at']}",
+        f"Nombre completo: {nombre} {apellidos}",
+        f"Fecha de nacimiento: {fecha_nacimiento or 'No informada'}",
+        f"Tratamiento/Género: {forma_trato or 'No especificado'}",
+        f"Idioma: {idioma or 'es'}",
+        f"Email del pedido: {pedido['email']}",
         "",
-        "Documento generado automaticamente para tu pedido.",
+        "Este archivo corresponde al Mapa del Alma del cliente indicado arriba.",
+        "Si detectas algún dato incorrecto, contacta soporte antes de usar el contenido.",
+        "",
+        f"Generado: {datetime.now(timezone.utc).isoformat()} UTC",
     ]
-    pdf_bytes = _build_minimal_pdf(lines)
+    pdf_bytes = _build_single_page_pdf(lines)
     with open(absolute, "wb") as f:
         f.write(pdf_bytes)
 

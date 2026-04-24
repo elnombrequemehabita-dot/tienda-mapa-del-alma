@@ -2022,17 +2022,18 @@ textarea.form-control {
 
 .site-footer-inner {
   position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
   margin: 0 auto;
   max-width: min(48rem, 100%);
-  padding: 0 clamp(4.25rem, 15vw, 6.75rem) 0 0.75rem;
+  padding: 0 0.75rem;
   text-align: center;
 }
 
 .site-footer-logo {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  position: static;
+  justify-self: end;
   width: clamp(3.5rem, 11vw, 4.75rem);
   height: auto;
   object-fit: contain;
@@ -2043,6 +2044,8 @@ textarea.form-control {
 
 .site-footer-copy {
   margin: 0;
+  justify-self: center;
+  text-align: center;
 }
 
 .site-footer a {
