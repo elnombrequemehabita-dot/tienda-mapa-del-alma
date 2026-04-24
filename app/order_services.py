@@ -172,8 +172,10 @@ def generar_pdf_automatico(order_id: int) -> str:
     logger.info("PDF REAL GENERADO EN: %s", absolute)
 
     database.update_pedido_campos(order_id, pdf_path=relative, clear_error=True)
+    logger.info("PDF_PATH REAL = %s", relative)
     logger.info("SUBIENDO PDF REAL A CLOUDINARY...")
     pdf_url = cloudinary_storage.upload_pdf(order_id, absolute)
+    logger.info("PDF_URL REAL = %s", pdf_url)
     database.update_pedido_campos(
         order_id,
         estado=ESTADO_PDF_GENERADO,
@@ -199,9 +201,17 @@ def enviar_pdf_cliente(order_id: int, pdf_url: str) -> None:
     pedido = database.get_pedido_by_id(order_id)
     if pedido is None:
         raise ValueError(f"No existe el pedido #{order_id}")
+    pdf_path_db = str(pedido["pdf_path"] or "").strip()
     pdf_url_db = str(pedido["pdf_url"] or "").strip()
+    if not pdf_path_db:
+        raise RuntimeError(f"Pedido #{order_id} sin pdf_path en base de datos.")
     if not pdf_url_db:
         raise RuntimeError(f"Pedido #{order_id} sin pdf_url en base de datos.")
+    expected_path = f"output/mapa_alma_{int(order_id)}.pdf"
+    if pdf_path_db != expected_path:
+        raise RuntimeError(
+            f"Pedido #{order_id} con pdf_path inesperado: {pdf_path_db} (esperado: {expected_path})"
+        )
     if pdf_url and str(pdf_url).strip() != pdf_url_db:
         logger.warning(
             "pdf_url en memoria difiere de BD para pedido #%s; se usará valor persistido.",
@@ -209,6 +219,9 @@ def enviar_pdf_cliente(order_id: int, pdf_url: str) -> None:
         )
     if not pdf_url_db.startswith("https://res.cloudinary.com/"):
         raise RuntimeError(f"pdf_url inválida para pedido #{order_id}: {pdf_url_db}")
+    logger.info("PDF_PATH REAL = %s", pdf_path_db)
+    logger.info("PDF_URL REAL = %s", pdf_url_db)
+    logger.info("ENVIANDO PDF REAL...")
     resena_url = _build_resena_url(order_id)
     email_service.send_customer_pdf_email(pedido, pdf_url=pdf_url_db, resena_url=resena_url)
     logger.info("PDF REAL ENVIADO POR LINK...")
