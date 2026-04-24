@@ -1,0 +1,9 @@
+# Tienda "El Nombre Que Me Habita" — dependencias mínimas
+# Instalar con: pip install -r requirements.txt
+
+Flask>=3.0.0,<4.0.0
+stripe
+python-dotenv
+itsdangerous
+waitress
+cloudinary

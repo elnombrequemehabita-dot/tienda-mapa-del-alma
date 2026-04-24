@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Contacto · {{ t('site.name') }}{% endblock %}
+{% block content %}
+  <section class="py-4 py-md-5">
+    <div class="section-home-inner contact-page">
+      <div class="contact-hero product-card mb-3">
+        <p class="contact-kicker mb-2">Atención al cliente</p>
+        <h1 class="section-title mb-2">Hablemos</h1>
+        <p class="text-muted small mb-0">
+          Escríbenos con tranquilidad: pedidos, entrega del PDF (enlace), pagos con Stripe o moderación de reseñas.
+          Cuanto más datos incluyas (número de pedido o código MAPA), más rápido podremos ayudarte.
+        </p>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-12 col-md-6">
+          <div class="product-card contact-card h-100">
+            <p class="contact-kicker mb-2">Soporte (recomendado)</p>
+            <h2 class="h5 mb-2" style="font-family: var(--font-display); color: var(--color-primary-dark)">Correo</h2>
+            <p class="small text-muted mb-3">
+              Usa este correo para dudas generales y seguimiento. Si puedes, responde al hilo del email de confirmación.
+            </p>
+            <div class="d-grid gap-2">
+              <a class="btn-primary-lg border-0 text-center" href="mailto:{{ support_email }}">Escribir a soporte</a>
+              <p class="mono-small text-break mb-0">{{ support_email }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12 col-md-6">
+          <div class="product-card contact-card h-100">
+            <p class="contact-kicker mb-2">Administración</p>
+            <h2 class="h5 mb-2" style="font-family: var(--font-display); color: var(--color-primary-dark)">Correo</h2>
+            <p class="small text-muted mb-3">
+              Para incidencias sensibles o comunicación interna (si coincide con tu operación).
+            </p>
+            <div class="d-grid gap-2">
+              <a class="btn-outline text-center py-2" href="mailto:{{ admin_email }}">Escribir a administración</a>
+              <p class="mono-small text-break mb-0">{{ admin_email }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {% if whatsapp_href or instagram_url %}
+        <div class="product-card mb-3">
+          <p class="contact-kicker mb-2">También puedes encontrarnos</p>
+          <div class="d-flex flex-column flex-sm-row gap-2">
+            {% if whatsapp_href %}
+              <a class="btn-outline text-center py-2 flex-fill" href="{{ whatsapp_href }}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+            {% endif %}
+            {% if instagram_url %}
+              <a class="btn-outline text-center py-2 flex-fill" href="{{ instagram_url }}" target="_blank" rel="noopener noreferrer">Instagram</a>
+            {% endif %}
+          </div>
+          <p class="small text-muted mb-0 mt-3">
+            Los enlaces opcionales se configuran con variables de entorno (ver <span class="mono-small">.env.example</span>).
+          </p>
+        </div>
+      {% endif %}
+
+      <div class="product-card mb-0">
+        <p class="contact-kicker mb-2">Qué incluir en tu mensaje</p>
+        <ul class="small mb-0">
+          <li>Tu nombre y el email con el que hiciste el pedido.</li>
+          <li>Si aplica: número de pedido o código de confirmación (MAPA-…).</li>
+          <li>Qué necesitas: reenvío de enlace, duda de pago, problema al descargar, etc.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+{% endblock %}

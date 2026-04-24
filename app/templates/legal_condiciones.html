@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Condiciones · {{ t('site.name') }}{% endblock %}
+{% block content %}
+  <section class="py-4 py-md-5">
+    <div class="section-home-inner" style="max-width: 52rem">
+      <h1 class="section-title mb-3">Condiciones del servicio</h1>
+      <p class="text-muted small mb-4">
+        Texto orientativo para publicación. Ajusta precios, plazos y políticas según tu operación real.
+      </p>
+
+      <div class="product-card mb-3">
+        <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">Producto digital</h2>
+        <p class="small mb-0">
+          El producto se entrega en formato digital (por ejemplo PDF) mediante enlace. No incluye envío físico salvo que se indique expresamente.
+        </p>
+      </div>
+
+      <div class="product-card mb-3">
+        <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">Pagos</h2>
+        <p class="small mb-0">
+          Los pagos se procesan mediante <strong>Stripe</strong>. El estado del pedido se actualiza automáticamente cuando el pago queda confirmado.
+        </p>
+      </div>
+
+      <div class="product-card mb-3">
+        <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">Política de cambios / reembolsos</h2>
+        <p class="small mb-0">
+          Por ser un producto personalizado, normalmente no se aceptan cambios ni reembolsos una vez iniciada la creación, salvo obligación legal aplicable.
+        </p>
+      </div>
+
+      <div class="product-card mb-0">
+        <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">Soporte</h2>
+        <p class="small mb-0">
+          Si tienes incidencias con la entrega o el acceso al enlace, contacta por el correo indicado en la página de contacto.
+        </p>
+      </div>
+    </div>
+  </section>
+{% endblock %}

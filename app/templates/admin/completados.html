@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Completados · Admin{% endblock %}
+{% block content %}
+  <section class="py-4 py-md-5">
+    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-md-between gap-3 mb-3">
+      <div>
+        <h1 class="section-title mb-1">Completados</h1>
+        <p class="text-muted small mb-0">Pedidos finalizados correctamente.</p>
+      </div>
+      <div class="d-flex gap-2">
+        <a
+          class="btn-outline btn-sm py-2 {% if current_tab == 'pedidos' %}active-admin-tab{% endif %}"
+          href="{{ url_for('main.admin_pedidos') }}"
+        >
+          Pedidos
+        </a>
+        <a
+          class="btn-outline btn-sm py-2 {% if current_tab == 'completados' %}active-admin-tab{% endif %}"
+          href="{{ url_for('main.admin_completados') }}"
+        >
+          Completados
+        </a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_resenas') }}">Reseñas</a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.index') }}">Tienda</a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_logout') }}">Salir</a>
+      </div>
+    </div>
+
+    {% if pedidos and pedidos|length > 0 %}
+      <div class="table-wrap">
+        <table class="table-mystic">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Código</th>
+              <th>Creado (UTC)</th>
+              <th>Actualizado</th>
+              <th>Nombre</th>
+              <th>Apellidos</th>
+              <th>Email</th>
+              <th>Trato</th>
+              <th>PDF</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in pedidos %}
+              {% set pdf = (p["pdf_url"] or p["pdf_path"] or "") %}
+              <tr>
+                <td><strong>#{{ p["id"] }}</strong></td>
+                <td class="mono-small">{{ codigo_confirmacion_pedido(p["id"]) }}</td>
+                <td class="mono-small">{{ p["created_at"] }}</td>
+                <td class="mono-small">{{ p["updated_at"] or "—" }}</td>
+                <td>{{ p["nombre"] or "—" }}</td>
+                <td>{{ p["apellidos"] or "—" }}</td>
+                <td><a href="mailto:{{ p['email'] }}">{{ p["email"] }}</a></td>
+                <td class="small">{{ etiqueta_forma_trato(p["forma_trato"]) }}</td>
+                <td class="small text-break">
+                  {% if p["pdf_url"] %}
+                    <a href="{{ p['pdf_url'] }}" target="_blank" rel="noopener noreferrer">Enlace</a>
+                  {% elif pdf %}
+                    {{ pdf[:48] }}{% if pdf|length > 48 %}…{% endif %}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td>
+                  <div class="d-grid gap-1">
+                    <a
+                      class="btn-outline btn-sm py-2 text-nowrap d-inline-block"
+                      href="{{ url_for('main.admin_pedido_detail', pedido_id=p['id'], tab='completados') }}"
+                    >
+                      Ver
+                    </a>
+                    <form
+                      method="post"
+                      action="{{ url_for('main.admin_pedido_eliminar', pedido_id=p['id']) }}"
+                      class="js-delete-preserve-scroll"
+                      onsubmit="return confirm('¿Eliminar el pedido #{{ p['id'] }}? Esta acción no se puede deshacer.');"
+                    >
+                      <input type="hidden" name="tab" value="completados" />
+                      <input type="hidden" name="scroll_y" value="0" />
+                      <button type="submit" class="btn btn-sm btn-outline-danger w-100">Eliminar</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="product-card text-center mb-0">
+        <p class="mb-0 text-muted">Aún no hay pedidos completados.</p>
+      </div>
+    {% endif %}
+  </section>
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var scroll = parseInt(params.get("scroll") || "", 10);
+      if (!Number.isNaN(scroll) && scroll > 0) {
+        window.scrollTo(0, scroll);
+      }
+      var forms = document.querySelectorAll(".js-delete-preserve-scroll");
+      forms.forEach(function (form) {
+        form.addEventListener("submit", function () {
+          var input = form.querySelector('input[name="scroll_y"]');
+          if (input) input.value = String(window.scrollY || 0);
+        });
+      });
+    })();
+  </script>
+{% endblock %}

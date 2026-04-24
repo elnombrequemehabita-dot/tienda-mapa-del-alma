@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Privacidad · {{ t('site.name') }}{% endblock %}
+{% block content %}
+  <section class="py-4 py-md-5">
+    <div class="section-home-inner" style="max-width: 52rem">
+      <h1 class="section-title mb-3">Privacidad</h1>
+      <p class="text-muted small mb-4">
+        Texto orientativo para publicación. Revísalo con tu asesor legal si vendes en la UE/ES (RGPD).
+      </p>
+
+      <div class="product-card mb-3">
+        <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">Responsable</h2>
+        <p class="mb-0 small">
+          El responsable del tratamiento es <strong>{{ t('site.name') }}</strong>. Para contacto, usa el correo indicado en la página de contacto.
+        </p>
+      </div>
+
+      <div class="product-card mb-3">
+        <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">Datos que recogemos</h2>
+        <ul class="small mb-0">
+          <li>Datos del pedido (nombre, apellidos, email y datos opcionales que indiques en el formulario).</li>
+          <li>Datos de pago procesados por <strong>Stripe</strong> (la tienda no almacena el número completo de tarjeta).</li>
+          <li>Reseñas que envíes voluntariamente (quedan en moderación hasta aprobación).</li>
+        </ul>
+      </div>
+
+      <div class="product-card mb-3">
+        <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">Finalidad</h2>
+        <p class="small mb-0">
+          Gestionar tu pedido, entregar el producto digital, comunicarnos contigo por email y moderar reseñas.
+        </p>
+      </div>
+
+      <div class="product-card mb-3">
+        <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">Proveedores</h2>
+        <p class="small mb-0">
+          Podemos utilizar proveedores necesarios para operar la tienda (por ejemplo: <strong>Stripe</strong> para pagos,
+          <strong>Cloudinary</strong> para alojar el PDF y un proveedor de correo para notificaciones).
+        </p>
+      </div>
+
+      <div class="product-card mb-0">
+        <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">Conservación</h2>
+        <p class="small mb-0">
+          Conservaremos la información el tiempo necesario para cumplir la finalidad, resolver incidencias y cumplir obligaciones legales.
+        </p>
+      </div>
+    </div>
+  </section>
+{% endblock %}

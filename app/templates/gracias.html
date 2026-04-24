@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ t('gracias.title') }}{% endblock %}
+{% block content %}
+  <section class="py-4 py-md-5 thanks-shell">
+    <div class="thanks-card text-center">
+      <div class="thanks-confirm" role="status" aria-label="{{ t('gracias.confirmed') }}">
+        <span class="thanks-confirm-check" aria-hidden="true">✓</span>
+        <span class="thanks-confirm-text">{{ t('gracias.confirmed') }}</span>
+      </div>
+      <h1 class="section-title thanks-title">{{ t('gracias.header') }}</h1>
+      <p class="thanks-message mx-auto mb-4">
+        {{ t('gracias.msg') }}
+      </p>
+      {% if pedido_id %}
+        <p class="thanks-reference mb-3">{{ t('gracias.ref') }}: <strong>#{{ pedido_id }}</strong></p>
+      {% endif %}
+      <p class="thanks-reference mb-4">{{ t('gracias.code') }}: <strong>{{ codigo_confirmacion }}</strong></p>
+      <div class="d-flex flex-column flex-sm-row gap-2 justify-content-center">
+        <a class="btn-primary-lg" href="{{ url_for('main.index') }}">{{ t('gracias.home') }}</a>
+        <a class="btn-outline" href="{{ url_for('main.pedido') }}">{{ t('gracias.new_order') }}</a>
+      </div>
+    </div>
+  </section>
+{% endblock %}

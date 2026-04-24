@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Tu reseña · El Nombre Que Me Habita{% endblock %}
+{% block content %}
+  <section class="section-resena py-4 py-md-5">
+    <div class="resena-shell mx-auto">
+      <p class="small text-muted mb-2"><a href="{{ url_for('main.index') }}">← Volver al inicio</a></p>
+      <h1 class="section-title mb-2">Valorar tu Mapa del Alma</h1>
+      <p class="text-muted small mb-4">
+        Pedido <strong>#{{ pedido["id"] }}</strong> · Solo publicamos reseñas tras revisarlas.
+      </p>
+
+      {% if ya_enviada %}
+        <div class="resena-card resena-card--notice">
+          <p class="mb-0">
+            Para este pedido ya tenemos una reseña enviada o aprobada. Si necesitas corregir algo, escríbenos.
+          </p>
+        </div>
+      {% else %}
+        <form method="post" class="resena-form" novalidate>
+          <div class="resena-card mb-3">
+            <label class="form-label" for="nombre">Tu nombre</label>
+            <input
+              class="form-control"
+              id="nombre"
+              name="nombre"
+              type="text"
+              required
+              maxlength="120"
+              value="{{ nombre_default }}"
+              autocomplete="name"
+            />
+          </div>
+
+          <div class="resena-card mb-3">
+            <label class="form-label" for="email">Correo del pedido</label>
+            <input
+              class="form-control"
+              id="email"
+              name="email"
+              type="email"
+              required
+              value="{{ email_default }}"
+              autocomplete="email"
+            />
+            <p class="form-hint small text-muted mt-2 mb-0">Debe coincidir con el email con el que hiciste el pedido.</p>
+          </div>
+
+          <div class="resena-card mb-3">
+            <span class="form-label d-block mb-2">Valoración (1 a 5 estrellas)</span>
+            <div class="star-picker" role="radiogroup" aria-label="Valoración de 1 a 5 estrellas">
+              {% for n in range(1, 6) %}
+                <label class="star-picker__opt">
+                  <input type="radio" name="rating" value="{{ n }}" required {% if n == 5 %}checked{% endif %} />
+                  <span class="star-picker__stars" aria-hidden="true">
+                    {%- for _ in range(n) %}★{% endfor -%}
+                  </span>
+                  <span class="visually-hidden">{{ n }} de 5</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="resena-card mb-4">
+            <label class="form-label" for="comentario">Tu experiencia</label>
+            <textarea
+              class="form-control resena-textarea"
+              id="comentario"
+              name="comentario"
+              rows="5"
+              required
+              minlength="10"
+              maxlength="2000"
+              placeholder="Cuéntanos qué te ha parecido el mapa, la entrega, el diseño…"
+            ></textarea>
+          </div>
+
+          <div class="d-grid gap-2 d-sm-flex">
+            <button type="submit" class="btn-primary-lg flex-grow-1">Enviar reseña</button>
+            <a class="btn-outline text-center py-2 px-3 align-self-stretch d-flex align-items-center justify-content-center" href="{{ url_for('main.index') }}">Cancelar</a>
+          </div>
+        </form>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Reseñas · Admin{% endblock %}
+{% block content %}
+  <section class="py-4 py-md-5">
+    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-md-between gap-3 mb-3">
+      <div>
+        <h1 class="section-title mb-1">Reseñas</h1>
+        <p class="text-muted small mb-0">
+          Las nuevas entradas quedan en <strong>pendiente</strong> hasta que apruebes o rechaces.
+        </p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_pedidos') }}">Pedidos</a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_completados') }}">Completados</a>
+        <a class="btn-outline btn-sm py-2 active-admin-tab" href="{{ url_for('main.admin_resenas') }}">Reseñas</a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.index') }}">Tienda</a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_logout') }}">Salir</a>
+      </div>
+    </div>
+
+    {% if resenas and resenas|length > 0 %}
+      <div class="table-wrap">
+        <table class="table-mystic">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Pedido</th>
+              <th>Nombre</th>
+              <th>Email</th>
+              <th>Estrellas</th>
+              <th>Comentario</th>
+              <th>Estado</th>
+              <th>Fecha (UTC)</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in resenas %}
+              <tr>
+                <td><strong>#{{ r["id"] }}</strong></td>
+                <td>
+                  {% if r["pedido_id"] %}
+                    <a href="{{ url_for('main.admin_pedido_detail', pedido_id=r['pedido_id']) }}">#{{ r["pedido_id"] }}</a>
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+                <td>{{ r["nombre_cliente"] }}</td>
+                <td class="small"><a href="mailto:{{ r['email_cliente'] }}">{{ r["email_cliente"] }}</a></td>
+                <td class="resena-stars-cell" aria-label="{{ r['rating'] }} de 5">
+                  {% for _ in range(r["rating"]) %}★{% endfor %}{% for _ in range(5 - r["rating"]) %}<span class="text-muted">☆</span>{% endfor %}
+                </td>
+                <td class="small text-break" style="max-width: 14rem">{{ r["comentario"] }}</td>
+                <td>
+                  {% if r["estado"] == RESENA_PENDIENTE %}
+                    <span class="badge-estado" data-estado="pendiente">Pendiente</span>
+                  {% elif r["estado"] == RESENA_APROBADA %}
+                    <span class="badge-estado" data-estado="completado">Aprobada</span>
+                  {% else %}
+                    <span class="badge-estado" data-estado="revision_manual">Rechazada</span>
+                  {% endif %}
+                </td>
+                <td class="mono-small">{{ r["created_at"] }}</td>
+                <td>
+                  {% if r["estado"] == RESENA_PENDIENTE %}
+                    <div class="d-flex flex-column gap-1">
+                      <form method="post" action="{{ url_for('main.admin_resena_aprobar', resena_id=r['id']) }}" class="m-0">
+                        <button type="submit" class="btn btn-sm btn-success w-100">Aprobar</button>
+                      </form>
+                      <form method="post" action="{{ url_for('main.admin_resena_rechazar', resena_id=r['id']) }}" class="m-0">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary w-100">Rechazar</button>
+                      </form>
+                    </div>
+                  {% elif r["estado"] == RESENA_APROBADA %}
+                    <form
+                      method="post"
+                      action="{{ url_for('main.admin_resena_eliminar', resena_id=r['id']) }}"
+                      class="m-0"
+                      onsubmit="return confirm('¿Eliminar esta reseña publicada de forma permanente?');"
+                    >
+                      <button type="submit" class="btn btn-sm btn-outline-danger w-100">Eliminar</button>
+                    </form>
+                  {% else %}
+                    <span class="text-muted small">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-muted">Aún no hay reseñas registradas.</p>
+    {% endif %}
+  </section>
+{% endblock %}

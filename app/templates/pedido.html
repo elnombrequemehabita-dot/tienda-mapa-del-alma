@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}{{ t('pedido.title') }}{% endblock %}
+{% block content %}
+  <div class="py-3 py-md-4">
+    <div class="text-center mb-3">
+      <p class="hero-badge mb-2">{{ t('index.hero.price.name') }}</p>
+      <h1 class="section-title mb-2">{{ t('pedido.header') }}</h1>
+      <p class="text-muted mx-auto small form-intro">
+        {{ t('pedido.intro') }}
+      </p>
+    </div>
+
+    <form class="form-shell form-shell-compact" method="post" action="{{ url_for('main.crear_checkout_session') }}" novalidate>
+      <div class="form-grid-2">
+        <div class="mb-2 mb-md-3">
+          <label class="form-label" for="nombre">{{ t('pedido.name') }}</label>
+          <input
+            class="form-control"
+            type="text"
+            id="nombre"
+            name="nombre"
+            required
+            autocomplete="given-name"
+            value="{{ nombre or '' }}"
+            placeholder="Tu nombre"
+          />
+        </div>
+        <div class="mb-2 mb-md-3">
+          <label class="form-label" for="apellidos">{{ t('pedido.lastname') }}</label>
+          <input
+            class="form-control"
+            type="text"
+            id="apellidos"
+            name="apellidos"
+            required
+            autocomplete="family-name"
+            value="{{ apellidos or '' }}"
+            placeholder="Tus apellidos"
+          />
+        </div>
+      </div>
+
+      <div class="mb-2 mb-md-3">
+        <label class="form-label" for="email">{{ t('pedido.email') }}</label>
+        <input
+          class="form-control"
+          type="email"
+          id="email"
+          name="email"
+          required
+          autocomplete="email"
+          value="{{ email or '' }}"
+          placeholder="tu@correo.com"
+        />
+      </div>
+
+      <div class="mb-2 mb-md-3">
+        <label class="form-label" for="email_confirm">{{ t('pedido.email_confirm') }}</label>
+        <input
+          class="form-control"
+          type="email"
+          id="email_confirm"
+          name="email_confirm"
+          required
+          autocomplete="email"
+          value="{{ email_confirm or '' }}"
+          placeholder="Repite tu correo"
+        />
+      </div>
+
+      <div class="mb-2 mb-md-3">
+        <label class="form-label" for="fecha_nacimiento">{{ t('pedido.birthdate') }} <span class="fw-normal text-muted">{{ t('pedido.optional') }}</span></label>
+        <input
+          class="form-control"
+          type="date"
+          id="fecha_nacimiento"
+          name="fecha_nacimiento"
+          value="{{ fecha_nacimiento or '' }}"
+        />
+      </div>
+
+      <div class="mb-2 mb-md-3">
+        <label class="form-label" for="forma_trato">{{ t('pedido.form_of_address') }}</label>
+        <select class="form-select form-select-mystic" id="forma_trato" name="forma_trato">
+          <option value="" {% if not forma_trato_selected %}selected{% endif %}>{{ t('pedido.form_of_address_optional') }}</option>
+          {% for code, label in formas_trato_opciones %}
+            <option value="{{ code }}" {% if forma_trato_selected == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-check form-check-legal mt-3">
+        <input
+          class="form-check-input"
+          type="checkbox"
+          value="1"
+          id="acepta"
+          name="acepta"
+          {% if acepta_prev %}checked{% endif %}
+        />
+        <label class="form-check-label" for="acepta">
+          {{ t('pedido.confirm_data') }}
+        </label>
+      </div>
+
+      <div class="form-check form-check-legal mt-2">
+        <input
+          class="form-check-input"
+          type="checkbox"
+          value="1"
+          id="acepta_digital"
+          name="acepta_digital"
+          {% if acepta_digital_prev %}checked{% endif %}
+        />
+        <label class="form-check-label" for="acepta_digital">
+          {{ t('pedido.confirm_digital') }}
+        </label>
+      </div>
+
+      <div class="d-grid gap-2 mt-3">
+        <button class="btn-primary-lg w-100 border-0" type="submit">{{ t('pedido.submit') }}</button>
+        <a class="btn-outline w-100 text-center" href="{{ url_for('main.index') }}">{{ t('pedido.back') }}</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

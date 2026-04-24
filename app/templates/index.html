@@ -1,0 +1,408 @@
+{% extends "base.html" %}
+{% block title %}{{ t('index.title') }}{% endblock %}
+{% block content %}
+  {# ========== SECCIÓN 1: HERO ========== #}
+  <section class="hero home-hero" aria-labelledby="titulo-inicio">
+    <p class="hero-badge">{{ t('index.hero.badge') }}</p>
+    <h1 id="titulo-inicio">{{ t('index.hero.title') }}</h1>
+    <figure class="hero-mapa-wrap">
+      <img
+        class="hero-mapa-img"
+        src="{{ url_for('static', filename='img/mapa.png') }}"
+        alt="Ilustración Mapa del Alma"
+        width="640"
+        height="640"
+        decoding="async"
+        loading="eager"
+      />
+    </figure>
+    <p class="hero-subline">
+      {{ t('index.hero.subline') }}
+    </p>
+
+    <div class="hero-price-card" role="group" aria-label="Precio y plazo de entrega">
+      <p class="hero-price-main"><span class="hero-price-name">{{ t('index.hero.price.name') }}</span></p>
+      <p class="hero-price-amount">
+        <span class="hero-price-value">$14.99</span>
+        <span class="hero-price-currency">USD</span>
+      </p>
+      <p class="hero-price-delivery">{{ t('index.hero.price.delivery') }}</p>
+    </div>
+
+    <ul class="hero-benefits">
+      <li><span class="hero-benefits-mark" aria-hidden="true">✔</span> {{ t('index.hero.benefit1') }}</li>
+      <li><span class="hero-benefits-mark" aria-hidden="true">✔</span> {{ t('index.hero.benefit2') }}</li>
+      <li><span class="hero-benefits-mark" aria-hidden="true">✔</span> {{ t('index.hero.benefit3') }}</li>
+    </ul>
+
+    <div class="hero-cta-wrap">
+      <div class="hero-cta">
+        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">{{ t('index.hero.cta.primary') }}</a>
+        <a class="btn-outline" href="#vista-previa-pdf">{{ t('index.hero.cta.secondary') }}</a>
+      </div>
+      <p class="hero-urgency">{{ t('index.hero.urgency') }}</p>
+    </div>
+  </section>
+
+  {# Aclaración entrega PDF #}
+  <section class="section-home section-delivery-pin" aria-label="Forma de entrega">
+    <div class="section-home-inner">
+      <p class="delivery-pin-text">
+        {{ t('index.delivery.pin') }}
+      </p>
+    </div>
+  </section>
+
+  {# Esto no es para todo el mundo #}
+  <section id="para-quien" class="section-home section-audience" aria-labelledby="titulo-para-quien">
+    <div class="section-home-inner">
+      <h2 id="titulo-para-quien" class="section-heading-home">{{ t('index.audience.title') }}</h2>
+      <p class="section-lead-home section-lead-tight">
+        {{ t('index.audience.lead') }}
+      </p>
+      <div class="not-for-grid">
+        <div class="not-for-card">
+          <h3 class="not-for-title">{{ t('index.audience.not_for') }}</h3>
+          <ul class="not-for-list">
+            <li>{{ t('index.audience.n1') }}</li>
+            <li>{{ t('index.audience.n2') }}</li>
+            <li>{{ t('index.audience.n3') }}</li>
+          </ul>
+        </div>
+        <div class="not-for-card">
+          <h3 class="not-for-title">{{ t('index.audience.for_you') }}</h3>
+          <ul class="not-for-list">
+            <li>{{ t('index.audience.y1') }}</li>
+            <li>{{ t('index.audience.y2') }}</li>
+            <li>{{ t('index.audience.y3') }}</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ¿Cómo funciona? #}
+  <section id="como-funciona" class="section-home section-how" aria-labelledby="titulo-como">
+    <div class="section-home-inner">
+      <h2 id="titulo-como" class="section-heading-home">{{ t('index.how.title') }}</h2>
+      <p class="section-lead-home section-lead-tight">
+        {{ t('index.how.lead') }}
+      </p>
+      <ol class="how-steps">
+        <li class="how-step">
+          <span class="how-step-num">1</span>
+          <span class="how-step-body">{{ t('index.how.step1') }}</span>
+        </li>
+        <li class="how-step">
+          <span class="how-step-num">2</span>
+          <span class="how-step-body">{{ t('index.how.step2') }}</span>
+        </li>
+        <li class="how-step">
+          <span class="how-step-num">3</span>
+          <span class="how-step-body">{{ t('index.how.step3') }}</span>
+        </li>
+        <li class="how-step">
+          <span class="how-step-num">4</span>
+          <span class="how-step-body">{{ t('index.how.step4') }}</span>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  {# ========== VISTA PREVIA PDF ========== #}
+  <section id="vista-previa-pdf" class="section-home section-pdf" aria-labelledby="titulo-vista-pdf">
+    <div class="section-home-inner section-home-inner-wide">
+      <h2 id="titulo-vista-pdf" class="section-heading-home">{{ t('index.preview.title') }}</h2>
+      <p class="section-lead-home">
+        {{ t('index.preview.lead') }}
+      </p>
+
+      <div class="pdf-preview-layout">
+        <div
+          id="carouselPdfMapa"
+          class="carousel slide carousel-mystic"
+          data-bs-interval="false"
+          aria-roledescription="carrusel"
+          aria-label="Vista previa de páginas de ejemplo del PDF"
+        >
+          <div class="carousel-indicators carousel-indicators-mystic">
+            <button
+              type="button"
+              data-bs-target="#carouselPdfMapa"
+              data-bs-slide-to="0"
+              class="active"
+              aria-current="true"
+              aria-label="Portada ejemplo"
+            ></button>
+            <button type="button" data-bs-target="#carouselPdfMapa" data-bs-slide-to="1" aria-label="Página 1 ejemplo"></button>
+            <button type="button" data-bs-target="#carouselPdfMapa" data-bs-slide-to="2" aria-label="Página 2 ejemplo"></button>
+            <button type="button" data-bs-target="#carouselPdfMapa" data-bs-slide-to="3" aria-label="Página 3 ejemplo"></button>
+          </div>
+          <div class="carousel-inner">
+            <div class="carousel-item active">
+              <div class="carousel-pdf-frame">
+                <img
+                  class="carousel-pdf-img d-block"
+                  src="{{ url_for('static', filename='img/demo_portada.jpeg') }}"
+                  alt="Ejemplo de portada del PDF Mapa del Alma"
+                />
+              </div>
+            </div>
+            <div class="carousel-item">
+              <div class="carousel-pdf-frame">
+                <img
+                  class="carousel-pdf-img d-block"
+                  src="{{ url_for('static', filename='img/demo_pagina_1.jpeg') }}"
+                  alt="Ejemplo de página interior 1"
+                />
+              </div>
+            </div>
+            <div class="carousel-item">
+              <div class="carousel-pdf-frame">
+                <img
+                  class="carousel-pdf-img d-block"
+                  src="{{ url_for('static', filename='img/demo_pagina_2.jpeg') }}"
+                  alt="Ejemplo de página interior 2"
+                />
+              </div>
+            </div>
+            <div class="carousel-item">
+              <div class="carousel-pdf-frame">
+                <img
+                  class="carousel-pdf-img d-block"
+                  src="{{ url_for('static', filename='img/demo_pagina_3.jpeg') }}"
+                  alt="Ejemplo de página interior 3"
+                />
+              </div>
+            </div>
+          </div>
+          <button class="carousel-control-prev" type="button" data-bs-target="#carouselPdfMapa" data-bs-slide="prev">
+            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+            <span class="visually-hidden">{{ t('index.preview.prev') }}</span>
+          </button>
+          <button class="carousel-control-next" type="button" data-bs-target="#carouselPdfMapa" data-bs-slide="next">
+            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+            <span class="visually-hidden">{{ t('index.preview.next') }}</span>
+          </button>
+        </div>
+
+        <aside class="pdf-preview-thumbs" aria-label="Resumen de páginas de ejemplo">
+          <h3 class="pdf-preview-thumbs-title">{{ t('index.preview.what') }}</h3>
+          <div class="pdf-preview-thumb-grid">
+            <article class="pdf-thumb-card">
+              <img src="{{ url_for('static', filename='img/demo_portada.jpeg') }}" alt="Miniatura portada de ejemplo" />
+              <p>{{ t('index.preview.thumb1') }}</p>
+            </article>
+            <article class="pdf-thumb-card">
+              <img src="{{ url_for('static', filename='img/demo_pagina_1.jpeg') }}" alt="Miniatura página interior 1" />
+              <p>{{ t('index.preview.thumb2') }}</p>
+            </article>
+            <article class="pdf-thumb-card">
+              <img src="{{ url_for('static', filename='img/demo_pagina_2.jpeg') }}" alt="Miniatura página interior 2" />
+              <p>{{ t('index.preview.thumb3') }}</p>
+            </article>
+            <article class="pdf-thumb-card">
+              <img src="{{ url_for('static', filename='img/demo_pagina_3.jpeg') }}" alt="Miniatura página interior 3" />
+              <p>{{ t('index.preview.thumb4') }}</p>
+            </article>
+          </div>
+        </aside>
+      </div>
+
+      <p class="section-disclaimer-home">{{ t('index.preview.disclaimer') }}</p>
+    </div>
+  </section>
+
+  {# ========== MOCKUP LIBRO ========== #}
+  <section id="mockup-libro" class="section-home section-mockups" aria-labelledby="titulo-mockup">
+    <div class="section-home-inner">
+      <h2 id="titulo-mockup" class="section-heading-home">{{ t('index.mockup.title') }}</h2>
+      <p class="section-lead-home">
+        {{ t('index.mockup.lead') }}
+      </p>
+
+      <div class="mockup-gallery" role="group" aria-label="Ejemplos visuales en formato libro">
+        <figure class="mockup-figure">
+          <img
+            class="mockup-img"
+            src="{{ url_for('static', filename='img/mockup_libro_1.png') }}"
+            alt="Mockup ejemplo del Mapa del Alma en formato libro"
+            loading="lazy"
+            decoding="async"
+          />
+        </figure>
+        <figure class="mockup-figure">
+          <img
+            class="mockup-img"
+            src="{{ url_for('static', filename='img/mockup_libro_2.jpeg') }}"
+            alt="Segundo mockup visual del diseño en libro"
+            loading="lazy"
+            decoding="async"
+          />
+        </figure>
+      </div>
+
+      <p class="mockup-tagline">{{ t('index.mockup.tagline') }}</p>
+      <p class="nota-digital-home" role="note">
+        <strong>{{ t('index.mockup.digital') }}</strong>
+      </p>
+    </div>
+  </section>
+
+  {# ========== QUÉ INCLUYE ========== #}
+  <section id="que-incluye" class="section-home section-includes" aria-labelledby="titulo-incluye">
+    <div class="section-home-inner section-includes-card">
+      <h2 id="titulo-incluye" class="section-heading-home">{{ t('index.includes.title') }}</h2>
+      <ul class="includes-list">
+        <li>{{ t('index.includes.i1') }}</li>
+        <li>{{ t('index.includes.i2') }}</li>
+        <li>{{ t('index.includes.i3') }}</li>
+        <li>{{ t('index.includes.i4') }}</li>
+        <li>{{ t('index.includes.i5') }}</li>
+        <li>{{ t('index.includes.i6') }}</li>
+        <li>{{ t('index.includes.i7') }}</li>
+        <li>{{ t('index.includes.i8') }}</li>
+      </ul>
+    </div>
+  </section>
+
+  {# ========== FRASES EMOCIONALES ========== #}
+  <section class="section-home section-emotional-quotes" aria-labelledby="titulo-frases-emocionales">
+    <div class="section-home-inner">
+      <h2 id="titulo-frases-emocionales" class="section-heading-home">{{ t('index.quotes.title') }}</h2>
+      <div class="emotional-quotes-grid">
+        <blockquote class="emotional-quote-card">
+          <p>{{ t('index.quotes.q1') }}</p>
+        </blockquote>
+        <blockquote class="emotional-quote-card">
+          <p>{{ t('index.quotes.q2') }}</p>
+        </blockquote>
+        <blockquote class="emotional-quote-card">
+          <p>{{ t('index.quotes.q3') }}</p>
+        </blockquote>
+      </div>
+    </div>
+  </section>
+
+  {# ========== RESEÑAS (solo aprobadas) ========== #}
+  <section id="resenas" class="section-home section-reviews" aria-labelledby="titulo-resenas">
+    <div class="section-home-inner">
+      <h2 id="titulo-resenas" class="section-heading-home">{{ t('index.reviews.title') }}</h2>
+      <p class="section-lead-home section-lead-tight">
+        {{ t('index.reviews.lead') }}
+      </p>
+
+      {% if resenas_resumen %}
+        <div class="reviews-shop-summary" aria-label="Resumen de valoraciones">
+          <div class="reviews-shop-summary__score" aria-hidden="true">{{ "%.1f"|format(resenas_resumen.avg) }}</div>
+          <div class="reviews-shop-summary__body">
+            <div class="reviews-shop-summary__stars" aria-label="{{ '%.1f'|format(resenas_resumen.avg) }} de 5">
+              {% for _ in range(resenas_resumen.full) %}★{% endfor %}
+              {% if resenas_resumen.half %}<span class="reviews-summary-half">★</span>{% endif %}
+              {% for _ in range(resenas_resumen.outline) %}<span class="text-muted">☆</span>{% endfor %}
+            </div>
+            <p class="reviews-shop-summary__meta mb-0">
+              <strong>{{ "%.1f"|format(resenas_resumen.avg) }}</strong> de 5 ·
+              <span class="text-muted">{{ resenas_resumen.count }} opinión{% if resenas_resumen.count != 1 %}es{% endif %}</span>
+            </p>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if resenas_carousel_slides and resenas_carousel_slides|length > 0 %}
+        <div
+          id="carouselResenasAprobadas"
+          class="carousel slide carousel-mystic carousel-mystic--reviews"
+          data-bs-ride="carousel"
+          data-bs-interval="5200"
+          data-bs-wrap="true"
+          aria-roledescription="carrusel"
+          aria-label="Reseñas verificadas"
+        >
+          {% if resenas_carousel_slides|length > 1 %}
+            <div class="carousel-indicators carousel-indicators-mystic">
+              {% for slide in resenas_carousel_slides %}
+                <button
+                  type="button"
+                  data-bs-target="#carouselResenasAprobadas"
+                  data-bs-slide-to="{{ loop.index0 }}"
+                  class="{% if loop.first %}active{% endif %}"
+                  {% if loop.first %}aria-current="true"{% endif %}
+                  aria-label="Grupo {{ loop.index }} de reseñas"
+                ></button>
+              {% endfor %}
+            </div>
+          {% endif %}
+          <div class="carousel-inner">
+            {% for slide in resenas_carousel_slides %}
+              <div class="carousel-item {% if loop.first %}active{% endif %}">
+                <div class="carousel-pdf-frame">
+                  <div class="reviews-slide-grid">
+                    {% for r in slide %}
+                      <article class="review-card-public">
+                        <div class="review-card-public__stars" aria-label="{{ r['rating'] }} de 5">
+                          {% for _ in range(r["rating"]) %}★{% endfor %}
+                        </div>
+                        <p class="review-card-public__quote">“{{ r['comentario'] }}”</p>
+                        <p class="review-card-public__meta">
+                          <span class="review-card-public__name">{{ r["nombre_cliente"] }}</span>
+                          <span class="text-muted"> · {{ t('index.reviews.verified_order') }}</span>
+                        </p>
+                      </article>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+          {% if resenas_carousel_slides|length > 1 %}
+            <button class="carousel-control-prev" type="button" data-bs-target="#carouselResenasAprobadas" data-bs-slide="prev">
+              <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+              <span class="visually-hidden">Anterior</span>
+            </button>
+            <button class="carousel-control-next" type="button" data-bs-target="#carouselResenasAprobadas" data-bs-slide="next">
+              <span class="carousel-control-next-icon" aria-hidden="true"></span>
+              <span class="visually-hidden">Siguiente</span>
+            </button>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="review-card-public">
+          <p class="review-card-public__quote mb-0">
+            {{ t('index.reviews.empty') }}
+          </p>
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  {# ========== CIERRE CTA ========== #}
+  <section class="section-home section-final-cta" aria-labelledby="titulo-cta-final">
+    <div class="section-home-inner">
+      <p class="final-cta-text" id="titulo-cta-final">
+        {{ t('index.final.text') }}
+      </p>
+      <p class="final-cta-subtext">
+        {{ t('index.final.subtext') }}
+      </p>
+      <div class="text-center final-cta-actions">
+        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">{{ t('index.final.cta') }}</a>
+        <p class="final-cta-trust">{{ t('index.final.trust') }}</p>
+      </div>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    (function () {
+      var mq = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)");
+      if (!mq || !mq.matches) return;
+      var el = document.getElementById("carouselResenasAprobadas");
+      if (!el || !window.bootstrap || !window.bootstrap.Carousel) return;
+      var c = window.bootstrap.Carousel.getOrCreateInstance(el, { interval: false, ride: false });
+      c.pause();
+    })();
+  </script>
+{% endblock %}

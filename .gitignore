@@ -1,0 +1,25 @@
+# Entorno y secretos
+.env
+.env.*
+!.env.example
+.venv/
+*.pem
+*.key
+*.p12
+*.pfx
+secret.*
+secrets.*
+credentials.*
+
+# Python cache / build
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Base de datos y salidas generadas
+instance/tienda.sqlite
+instance/*.sqlite
+output/*.pdf
+instance/*.db

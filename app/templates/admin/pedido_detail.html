@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Pedido #{{ pedido["id"] }} · Admin{% endblock %}
+{% block content %}
+  <section class="py-4 py-md-5">
+    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-md-between gap-3 mb-4">
+      <div>
+        <p class="small text-muted mb-1">
+          <a href="{{ back_url }}">← {{ back_label }}</a>
+        </p>
+        <h1 class="section-title mb-1">Pedido #{{ pedido["id"] }}</h1>
+        <p class="text-muted small mb-0">
+          Estado actual:
+          <span class="badge-estado" data-estado="{{ pedido['estado'] }}">{{ etiqueta_estado(pedido["estado"]) }}</span>
+        </p>
+        <p class="small mono-small mb-0 mt-1">Código: {{ codigo_confirmacion_pedido(pedido["id"]) }}</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <a
+          class="btn-outline btn-sm py-2 {% if current_tab == 'pedidos' %}active-admin-tab{% endif %}"
+          href="{{ url_for('main.admin_pedidos') }}"
+        >
+          Pedidos
+        </a>
+        <a
+          class="btn-outline btn-sm py-2 {% if current_tab == 'completados' %}active-admin-tab{% endif %}"
+          href="{{ url_for('main.admin_completados') }}"
+        >
+          Completados
+        </a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_resenas') }}">Reseñas</a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.index') }}">Tienda</a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_logout') }}">Salir</a>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-12 col-lg-7">
+        <div class="product-card mb-3">
+          <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">Datos del cliente</h2>
+          <dl class="row mb-0 small">
+            <dt class="col-sm-4 text-muted">Nombre</dt>
+            <dd class="col-sm-8">{{ pedido["nombre"] }}</dd>
+            <dt class="col-sm-4 text-muted">Apellidos</dt>
+            <dd class="col-sm-8">{{ pedido["apellidos"] or "—" }}</dd>
+            <dt class="col-sm-4 text-muted">Email</dt>
+            <dd class="col-sm-8"><a href="mailto:{{ pedido['email'] }}">{{ pedido["email"] }}</a></dd>
+            <dt class="col-sm-4 text-muted">Fecha de nacimiento</dt>
+            <dd class="col-sm-8 mono-small">{{ pedido["fecha_nacimiento"] or "—" }}</dd>
+            <dt class="col-sm-4 text-muted">Tratamiento</dt>
+            <dd class="col-sm-8">{{ etiqueta_forma_trato(pedido["forma_trato"]) }}</dd>
+          </dl>
+        </div>
+
+        {% if resena_url %}
+          <div class="product-card mb-3">
+            <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">Enlace de reseña (cliente)</h2>
+            <p class="small text-muted mb-2">
+              Copia este enlace si el cliente no encuentra el correo con el PDF. Solo funciona con el pedido completado.
+            </p>
+            <p class="small mono-small text-break mb-0">{{ resena_url }}</p>
+          </div>
+        {% endif %}
+
+        <div class="product-card mb-3">
+          <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">Técnico / entrega</h2>
+          <dl class="row mb-0 small">
+            <dt class="col-sm-4 text-muted">Creado (UTC)</dt>
+            <dd class="col-sm-8 mono-small">{{ pedido["created_at"] }}</dd>
+            <dt class="col-sm-4 text-muted">Código</dt>
+            <dd class="col-sm-8 mono-small">{{ codigo_confirmacion_pedido(pedido["id"]) }}</dd>
+            <dt class="col-sm-4 text-muted">Actualizado</dt>
+            <dd class="col-sm-8 mono-small">{{ pedido["updated_at"] or "—" }}</dd>
+            <dt class="col-sm-4 text-muted">pdf_path</dt>
+            <dd class="col-sm-8 text-break mono-small">{{ pedido["pdf_path"] or "—" }}</dd>
+            <dt class="col-sm-4 text-muted">pdf_url</dt>
+            <dd class="col-sm-8 text-break mono-small">
+              {% if pedido["pdf_url"] %}
+                <a href="{{ pedido['pdf_url'] }}" target="_blank" rel="noopener noreferrer">{{ pedido["pdf_url"] }}</a>
+              {% else %}
+                —
+              {% endif %}
+            </dd>
+            <dt class="col-sm-4 text-muted">error_message</dt>
+            <dd class="col-sm-8 text-break small">{{ pedido["error_message"] or "—" }}</dd>
+          </dl>
+        </div>
+
+        <div class="product-card mb-0">
+          <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">Historial de notificaciones</h2>
+          {% if notificaciones %}
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Fecha (UTC)</th>
+                    <th>Tipo</th>
+                    <th>Destinatario</th>
+                    <th>Estado</th>
+                    <th>Error</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for n in notificaciones %}
+                    <tr>
+                      <td class="mono-small text-nowrap">{{ n["created_at"] }}</td>
+                      <td class="small">{{ n["tipo"] }}</td>
+                      <td class="small text-break">{{ n["destinatario"] }}</td>
+                      <td class="small">
+                        {% if n["estado"] == "enviado" %}
+                          <span class="badge bg-success-subtle text-success-emphasis">enviado</span>
+                        {% else %}
+                          <span class="badge bg-danger-subtle text-danger-emphasis">error</span>
+                        {% endif %}
+                      </td>
+                      <td class="small text-break">{{ n["error_message"] or "—" }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <p class="small text-muted mb-0">Todavía no hay notificaciones registradas para este pedido.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="col-12 col-lg-5">
+        <div class="product-card mb-3">
+          <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">Estado manual</h2>
+          <form method="post" action="{{ url_for('main.admin_pedido_estado', pedido_id=pedido['id']) }}">
+            <input type="hidden" name="next" value="detail" />
+            <label class="form-label" for="estado-detalle">Nuevo estado</label>
+            <select class="form-select mb-2" id="estado-detalle" name="estado">
+              {% for s in order_states %}
+                <option value="{{ s }}" {% if pedido["estado"] == s %}selected{% endif %}>{{ etiqueta_estado(s) }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn-primary-lg border-0 w-100">Guardar estado</button>
+          </form>
+        </div>
+
+        <div class="product-card mb-3">
+          <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">Acciones rápidas</h2>
+          <div class="d-grid gap-2">
+            <form method="post" action="{{ url_for('main.admin_pedido_marcar_pagado', pedido_id=pedido['id']) }}">
+              <button type="submit" class="btn-primary-lg border-0 w-100">Marcar como pagado</button>
+            </form>
+            <form method="post" action="{{ url_for('main.admin_pedido_marcar_revision_manual', pedido_id=pedido['id']) }}">
+              <button type="submit" class="btn-outline w-100">Marcar revisión manual</button>
+            </form>
+            <form method="post" action="{{ url_for('main.admin_pedido_marcar_completado', pedido_id=pedido['id']) }}">
+              <button type="submit" class="btn-outline w-100">Marcar completado</button>
+            </form>
+            {% if can_reenviar_notificaciones %}
+              <form method="post" action="{{ url_for('main.admin_pedido_reenviar_notificaciones', pedido_id=pedido['id']) }}">
+                <button type="submit" class="btn-outline w-100">Reenviar notificaciones</button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+{% endblock %}
