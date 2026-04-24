@@ -13,6 +13,7 @@ from flask import current_app, url_for
 from app import cloudinary_storage
 from app import db as database
 from app import email_service
+from app import pdf_generator
 from app.order_states import (
     ESTADO_COMPLETADO,
     ESTADO_ENVIANDO_EMAIL,
@@ -121,53 +122,6 @@ def detectar_pedidos_atascados(timeout_minutes: int = 20) -> int:
     return marcados
 
 
-def _escape_pdf_text(text: str) -> str:
-    return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-
-
-def _build_single_page_pdf(lines: list[str]) -> bytes:
-    """
-    Genera un PDF válido de una página con contenido textual.
-    Este constructor es el generador principal del documento entregado al cliente.
-    """
-    y_start = 780
-    line_ops = ["BT", "/F1 11 Tf", f"48 {y_start} Td"]
-    for i, line in enumerate(lines):
-        if i > 0:
-            line_ops.append("T*")
-        line_ops.append(f"({_escape_pdf_text(line)}) Tj")
-    line_ops.append("ET")
-    stream = "\n".join(line_ops).encode("utf-8")
-
-    objects = []
-    objects.append(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
-    objects.append(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
-    objects.append(
-        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
-        b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>\nendobj\n"
-    )
-    objects.append(
-        b"4 0 obj\n<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream\nendobj\n"
-    )
-    objects.append(b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n")
-
-    pdf = bytearray()
-    pdf.extend(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
-    offsets = [0]
-    for obj in objects:
-        offsets.append(len(pdf))
-        pdf.extend(obj)
-    xref_pos = len(pdf)
-    pdf.extend(f"xref\n0 {len(offsets)}\n".encode("ascii"))
-    pdf.extend(b"0000000000 65535 f \n")
-    for off in offsets[1:]:
-        pdf.extend(f"{off:010d} 00000 n \n".encode("ascii"))
-    pdf.extend(
-        f"trailer\n<< /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF\n".encode("ascii")
-    )
-    return bytes(pdf)
-
-
 def _pdf_output_paths(order_id: int) -> tuple[str, str]:
     """
     Devuelve (ruta_relativa, ruta_absoluta) en carpeta output del proyecto.
@@ -193,6 +147,7 @@ def generar_pdf_automatico(order_id: int) -> str:
             f"No se puede generar PDF para pedido #{order_id} porque estado={pedido['estado']} (se requiere pagado)."
         )
 
+    logger.info("GENERANDO PDF REAL PARA PEDIDO #%s...", order_id)
     database.update_pedido_campos(order_id, estado=ESTADO_GENERANDO_PDF, clear_error=True)
     relative, absolute = _pdf_output_paths(order_id)
     nombre = str(pedido["nombre"] or "").strip()
@@ -200,34 +155,24 @@ def generar_pdf_automatico(order_id: int) -> str:
     fecha_nacimiento = str(pedido["fecha_nacimiento"] or "").strip()
     forma_trato = str(pedido["forma_trato"] or "").strip()
     idioma = str(pedido["idioma"] or "").strip() if "idioma" in pedido.keys() else "es"
+    email = str(pedido["email"] or "").strip()
 
-    if not nombre:
-        raise RuntimeError(f"Pedido #{order_id} inválido: falta nombre para generar el PDF real.")
-    if not apellidos:
-        raise RuntimeError(f"Pedido #{order_id} inválido: falta apellidos para generar el PDF real.")
-
-    lines = [
-        "EL NOMBRE QUE ME HABITA",
-        "Mapa del Alma - Documento Personalizado",
-        "",
-        f"Pedido: #{pedido['id']}",
-        f"Codigo de confirmacion: {database.codigo_confirmacion_pedido(int(pedido['id']))}",
-        f"Nombre completo: {nombre} {apellidos}",
-        f"Fecha de nacimiento: {fecha_nacimiento or 'No informada'}",
-        f"Tratamiento/Género: {forma_trato or 'No especificado'}",
-        f"Idioma: {idioma or 'es'}",
-        f"Email del pedido: {pedido['email']}",
-        "",
-        "Este archivo corresponde al Mapa del Alma del cliente indicado arriba.",
-        "Si detectas algún dato incorrecto, contacta soporte antes de usar el contenido.",
-        "",
-        f"Generado: {datetime.now(timezone.utc).isoformat()} UTC",
-    ]
-    pdf_bytes = _build_single_page_pdf(lines)
+    pdf_bytes = pdf_generator.generate_real_mapa_pdf(
+        pedido_id=int(pedido["id"]),
+        codigo_confirmacion=database.codigo_confirmacion_pedido(int(pedido["id"])),
+        nombre=nombre,
+        apellidos=apellidos,
+        fecha_nacimiento=fecha_nacimiento,
+        forma_trato=forma_trato,
+        email=email,
+        idioma=idioma,
+    )
     with open(absolute, "wb") as f:
         f.write(pdf_bytes)
+    logger.info("PDF REAL GENERADO EN: %s", absolute)
 
     database.update_pedido_campos(order_id, pdf_path=relative, clear_error=True)
+    logger.info("SUBIENDO PDF REAL A CLOUDINARY...")
     pdf_url = cloudinary_storage.upload_pdf(order_id, absolute)
     database.update_pedido_campos(
         order_id,
@@ -266,6 +211,7 @@ def enviar_pdf_cliente(order_id: int, pdf_url: str) -> None:
         raise RuntimeError(f"pdf_url inválida para pedido #{order_id}: {pdf_url_db}")
     resena_url = _build_resena_url(order_id)
     email_service.send_customer_pdf_email(pedido, pdf_url=pdf_url_db, resena_url=resena_url)
+    logger.info("PDF REAL ENVIADO POR LINK...")
     _log_notif(
         pedido_id=order_id,
         tipo="cliente_link_descarga_enviado",
