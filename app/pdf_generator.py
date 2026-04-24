@@ -6,53 +6,33 @@ el flujo post-pago marque error.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import importlib
+import os
+from typing import Any, Callable
 
 
-def _escape_pdf_text(text: str) -> str:
-    return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-
-
-def _build_single_page_pdf(lines: list[str]) -> bytes:
+def _load_real_generator() -> Callable[..., Any]:
     """
-    Genera un PDF válido de una página con contenido textual personalizado.
+    Carga la función REAL de generación PDF desde un módulo externo.
+    Sin fallback de prueba: si no está configurado o falla la carga, lanza excepción.
     """
-    y_start = 780
-    line_ops = ["BT", "/F1 11 Tf", f"48 {y_start} Td"]
-    for i, line in enumerate(lines):
-        if i > 0:
-            line_ops.append("T*")
-        line_ops.append(f"({_escape_pdf_text(line)}) Tj")
-    line_ops.append("ET")
-    stream = "\n".join(line_ops).encode("utf-8")
-
-    objects = []
-    objects.append(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
-    objects.append(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
-    objects.append(
-        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
-        b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>\nendobj\n"
-    )
-    objects.append(
-        b"4 0 obj\n<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream\nendobj\n"
-    )
-    objects.append(b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n")
-
-    pdf = bytearray()
-    pdf.extend(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
-    offsets = [0]
-    for obj in objects:
-        offsets.append(len(pdf))
-        pdf.extend(obj)
-    xref_pos = len(pdf)
-    pdf.extend(f"xref\n0 {len(offsets)}\n".encode("ascii"))
-    pdf.extend(b"0000000000 65535 f \n")
-    for off in offsets[1:]:
-        pdf.extend(f"{off:010d} 00000 n \n".encode("ascii"))
-    pdf.extend(
-        f"trailer\n<< /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF\n".encode("ascii")
-    )
-    return bytes(pdf)
+    ref = (os.environ.get("MAPA_REAL_PDF_GENERATOR") or "").strip()
+    if not ref:
+        raise RuntimeError(
+            "MAPA_REAL_PDF_GENERATOR no configurado. "
+            "Debes definirlo como 'modulo.funcion' (ej: 'mapa_premium_final_global.generar_pdf')."
+        )
+    if "." not in ref:
+        raise RuntimeError("MAPA_REAL_PDF_GENERATOR inválido: usa formato 'modulo.funcion'.")
+    module_name, func_name = ref.rsplit(".", 1)
+    try:
+        mod = importlib.import_module(module_name)
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"No se pudo importar el módulo real '{module_name}': {exc}") from exc
+    fn = getattr(mod, func_name, None)
+    if not callable(fn):
+        raise RuntimeError(f"La función real '{func_name}' no existe o no es callable en '{module_name}'.")
+    return fn
 
 
 def generate_real_mapa_pdf(
@@ -78,23 +58,24 @@ def generate_real_mapa_pdf(
         raise RuntimeError(f"Pedido #{pedido_id} inválido: falta apellidos para generar el PDF real.")
     if not email_clean:
         raise RuntimeError(f"Pedido #{pedido_id} inválido: falta email para generar el PDF real.")
-
-    lines = [
-        "EL NOMBRE QUE ME HABITA",
-        "Mapa del Alma - Documento Personalizado",
-        "",
-        f"Pedido: #{pedido_id}",
-        f"Codigo de confirmacion: {codigo_confirmacion}",
-        f"Nombre completo: {nombre_clean} {apellidos_clean}",
-        f"Fecha de nacimiento: {str(fecha_nacimiento or '').strip() or 'No informada'}",
-        f"Tratamiento/Género: {str(forma_trato or '').strip() or 'No especificado'}",
-        f"Idioma: {str(idioma or '').strip() or 'es'}",
-        f"Email del pedido: {email_clean}",
-        "",
-        "Este archivo corresponde al Mapa del Alma del cliente indicado arriba.",
-        "Si detectas algún dato incorrecto, contacta soporte antes de usar el contenido.",
-        "",
-        f"Generado: {datetime.now(timezone.utc).isoformat()} UTC",
-    ]
-    return _build_single_page_pdf(lines)
+    real_fn = _load_real_generator()
+    payload = {
+        "pedido_id": int(pedido_id),
+        "codigo_confirmacion": str(codigo_confirmacion),
+        "nombre": nombre_clean,
+        "apellidos": apellidos_clean,
+        "fecha_nacimiento": str(fecha_nacimiento or "").strip(),
+        "forma_trato": str(forma_trato or "").strip(),
+        "email": email_clean,
+        "idioma": str(idioma or "").strip() or "es",
+    }
+    result = real_fn(**payload)
+    if isinstance(result, bytes):
+        if not result:
+            raise RuntimeError("El generador real devolvió bytes vacíos.")
+        return result
+    raise RuntimeError(
+        "El generador real debe devolver bytes del PDF. "
+        f"Tipo recibido: {type(result).__name__}"
+    )
 

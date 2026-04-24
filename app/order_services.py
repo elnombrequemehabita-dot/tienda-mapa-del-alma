@@ -147,6 +147,7 @@ def generar_pdf_automatico(order_id: int) -> str:
             f"No se puede generar PDF para pedido #{order_id} porque estado={pedido['estado']} (se requiere pagado)."
         )
 
+    logger.info("USANDO GENERADOR REAL")
     logger.info("GENERANDO PDF REAL PARA PEDIDO #%s...", order_id)
     database.update_pedido_campos(order_id, estado=ESTADO_GENERANDO_PDF, clear_error=True)
     relative, absolute = _pdf_output_paths(order_id)
@@ -170,12 +171,14 @@ def generar_pdf_automatico(order_id: int) -> str:
     with open(absolute, "wb") as f:
         f.write(pdf_bytes)
     logger.info("PDF REAL GENERADO EN: %s", absolute)
+    logger.info("TAMAÑO PDF REAL: %s bytes", len(pdf_bytes))
 
     database.update_pedido_campos(order_id, pdf_path=relative, clear_error=True)
     logger.info("PDF_PATH REAL = %s", relative)
     logger.info("SUBIENDO PDF REAL A CLOUDINARY...")
     pdf_url = cloudinary_storage.upload_pdf(order_id, absolute)
     logger.info("PDF_URL REAL = %s", pdf_url)
+    logger.info("PDF REAL SUBIDO A CLOUDINARY: %s", pdf_url)
     database.update_pedido_campos(
         order_id,
         estado=ESTADO_PDF_GENERADO,
