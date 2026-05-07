@@ -1,3 +1,7 @@
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 """
 Punto de entrada para ejecutar la tienda en desarrollo.
 

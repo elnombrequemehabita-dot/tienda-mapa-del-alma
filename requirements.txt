@@ -6,5 +6,6 @@ stripe
 python-dotenv
 itsdangerous
 waitress
-cloudinary
 reportlab
+psycopg2-binary
+openai

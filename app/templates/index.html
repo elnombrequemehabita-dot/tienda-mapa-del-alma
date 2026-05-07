@@ -1,267 +1,275 @@
 {% extends "base.html" %}
 {% block title %}{{ t('index.title') }}{% endblock %}
 {% block content %}
-  {# ========== SECCIÓN 1: HERO ========== #}
-  <section class="hero home-hero" aria-labelledby="titulo-inicio">
-    <p class="hero-badge">{{ t('index.hero.badge') }}</p>
-    <h1 id="titulo-inicio">{{ t('index.hero.title') }}</h1>
-    <figure class="hero-mapa-wrap">
-      <img
-        class="hero-mapa-img"
-        src="{{ url_for('static', filename='img/mapa.png') }}"
-        alt="Ilustración Mapa del Alma"
-        width="640"
-        height="640"
-        decoding="async"
-        loading="eager"
-      />
-    </figure>
-    <p class="hero-subline">
-      {{ t('index.hero.subline') }}
-    </p>
+  {# ==========================================================
+     HOME PREMIUM — EL NOMBRE QUE ME HABITA
+     Objetivo: vender una experiencia emocional, íntima y exclusiva.
+     ========================================================== #}
 
-    <div class="hero-price-card" role="group" aria-label="Precio y plazo de entrega">
-      <p class="hero-price-main"><span class="hero-price-name">{{ t('index.hero.price.name') }}</span></p>
-      <p class="hero-price-amount">
-        <span class="hero-price-value">$14.99</span>
-        <span class="hero-price-currency">USD</span>
-      </p>
-      <p class="hero-price-delivery">{{ t('index.hero.price.delivery') }}</p>
+  {# ========== HERO CINEMATOGRÁFICO ========== #}
+  <section class="hero home-hero hero-cinematic" aria-labelledby="titulo-inicio">
+    <div class="hero-cinematic__glow" aria-hidden="true"></div>
+
+    <div class="hero-cinematic__visual" aria-label="Vista visual premium del Mapa del Alma">
+      {# Imagen principal de identidad de marca: NO eliminar #}
+      <figure class="hero-mapa-wrap hero-mapa-wrap-premium">
+        <img
+          class="hero-mapa-img"
+          src="{{ url_for('static', filename='img/mapa.png') }}"
+          alt="Mapa del Alma - El Nombre Que Me Habita"
+          width="640"
+          height="640"
+          decoding="async"
+          loading="eager"
+        />
+      </figure>
+
+      <figure class="hero-premium-book-wrap" aria-label="Mockup premium del Mapa del Alma">
+        <img
+          class="hero-premium-book-img"
+          src="{{ url_for('static', filename='img/hero_mockup_principal.jpeg') }}"
+          alt="Mockup premium del Mapa del Alma en formato libro"
+          width="1100"
+          height="760"
+          decoding="async"
+          loading="eager"
+        />
+      </figure>
     </div>
 
-    <ul class="hero-benefits">
-      <li><span class="hero-benefits-mark" aria-hidden="true">✔</span> {{ t('index.hero.benefit1') }}</li>
-      <li><span class="hero-benefits-mark" aria-hidden="true">✔</span> {{ t('index.hero.benefit2') }}</li>
-      <li><span class="hero-benefits-mark" aria-hidden="true">✔</span> {{ t('index.hero.benefit3') }}</li>
-    </ul>
 
-    <div class="hero-cta-wrap">
-      <div class="hero-cta">
-        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">{{ t('index.hero.cta.primary') }}</a>
-        <a class="btn-outline" href="#vista-previa-pdf">{{ t('index.hero.cta.secondary') }}</a>
-      </div>
-      <p class="hero-urgency">{{ t('index.hero.urgency') }}</p>
-    </div>
-  </section>
+    <div class="hero-cinematic__content">
+      <p class="hero-badge">Lectura privada premium · Creada una por una</p>
 
-  {# Aclaración entrega PDF #}
-  <section class="section-home section-delivery-pin" aria-label="Forma de entrega">
-    <div class="section-home-inner">
-      <p class="delivery-pin-text">
-        {{ t('index.delivery.pin') }}
+      <h1 id="titulo-inicio">
+        Tu nombre guarda una historia que nadie te había mostrado así.
+      </h1>
+
+      <p class="hero-subline hero-subline-premium">
+        Una experiencia simbólica, emocional y profundamente personal creada para revelar la energía de tu nombre,
+        tu esencia, tus patrones, tus dones y la historia invisible que te acompaña.
       </p>
-    </div>
-  </section>
 
-  {# Esto no es para todo el mundo #}
-  <section id="para-quien" class="section-home section-audience" aria-labelledby="titulo-para-quien">
-    <div class="section-home-inner">
-      <h2 id="titulo-para-quien" class="section-heading-home">{{ t('index.audience.title') }}</h2>
-      <p class="section-lead-home section-lead-tight">
-        {{ t('index.audience.lead') }}
-      </p>
-      <div class="not-for-grid">
-        <div class="not-for-card">
-          <h3 class="not-for-title">{{ t('index.audience.not_for') }}</h3>
-          <ul class="not-for-list">
-            <li>{{ t('index.audience.n1') }}</li>
-            <li>{{ t('index.audience.n2') }}</li>
-            <li>{{ t('index.audience.n3') }}</li>
-          </ul>
+      <div class="hero-cta-wrap hero-cta-wrap-premium">
+        <div class="hero-cta">
+          <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Quiero descubrir mi mapa</a>
+          <a class="btn-outline" href="#vista-previa-pdf">Mirar dentro del mapa</a>
         </div>
-        <div class="not-for-card">
-          <h3 class="not-for-title">{{ t('index.audience.for_you') }}</h3>
-          <ul class="not-for-list">
-            <li>{{ t('index.audience.y1') }}</li>
-            <li>{{ t('index.audience.y2') }}</li>
-            <li>{{ t('index.audience.y3') }}</li>
-          </ul>
-        </div>
+        <p class="hero-urgency">Cada mapa se crea de forma personalizada · Cupos limitados por día</p>
       </div>
     </div>
+
+    <div class="hero-value-strip" role="group" aria-label="Precio y beneficios principales">
+      <div class="hero-price-card hero-price-card-premium">
+        <p class="hero-price-main"><span class="hero-price-name">Mapa del Alma personalizado</span></p>
+        <p class="hero-price-amount">
+          <span class="hero-price-value">$27.00</span>
+          <span class="hero-price-currency">USD</span>
+        </p>
+        <p class="hero-price-delivery">Entrega digital premium en 24–48 horas</p>
+      </div>
+
+      <ul class="hero-benefits hero-benefits-premium">
+        <li><span class="hero-benefits-mark" aria-hidden="true">✔</span> Más de 20 páginas personalizadas con diseño editorial</li>
+        <li><span class="hero-benefits-mark" aria-hidden="true">✔</span> Lectura simbólica creada con tus datos, no una plantilla genérica</li>
+        <li><span class="hero-benefits-mark" aria-hidden="true">✔</span> Entrega por email mediante link directo de descarga</li>
+      </ul>
+    </div>
   </section>
 
-  {# ¿Cómo funciona? #}
-  <section id="como-funciona" class="section-home section-how" aria-labelledby="titulo-como">
+  {# ========== DETALLES DE ENTREGA ELEGANTES ========== #}
+  <section class="section-home section-delivery-premium" aria-label="Detalles importantes de entrega">
     <div class="section-home-inner">
-      <h2 id="titulo-como" class="section-heading-home">{{ t('index.how.title') }}</h2>
+      <p class="delivery-premium-kicker">Detalles claros antes de comprar</p>
+      <h2 class="section-heading-home">Una experiencia digital privada, creada solo para ti</h2>
       <p class="section-lead-home section-lead-tight">
-        {{ t('index.how.lead') }}
+        Para mantener la experiencia organizada y personalizada, la entrega se realiza únicamente en formato digital.
+      </p>
+
+      <div class="delivery-details-grid">
+        <article class="delivery-detail-card">
+          <span class="delivery-detail-icon" aria-hidden="true">✦</span>
+          <h3>PDF digital premium</h3>
+          <p>Por el momento solo se vende la versión digital. No incluye libro físico ni envío postal.</p>
+        </article>
+        <article class="delivery-detail-card">
+          <span class="delivery-detail-icon" aria-hidden="true">✧</span>
+          <h3>Entrega 24–48 horas</h3>
+          <p>Tu mapa se prepara de forma personalizada y se envía al correo indicado en tu pedido.</p>
+        </article>
+        <article class="delivery-detail-card">
+          <span class="delivery-detail-icon" aria-hidden="true">☾</span>
+          <h3>Link de Google Drive</h3>
+          <p>Recibirás un link directo de descarga. Revisa también spam, promociones o correo no deseado.</p>
+        </article>
+        <article class="delivery-detail-card">
+          <span class="delivery-detail-icon" aria-hidden="true">✺</span>
+          <h3>Activo por 3 días</h3>
+          <p>El enlace estará disponible por 3 días y luego se elimina por seguridad y organización.</p>
+        </article>
+        <article class="delivery-detail-card delivery-detail-card--wide">
+          <span class="delivery-detail-icon" aria-hidden="true">◆</span>
+          <h3>Sin devoluciones por personalización</h3>
+          <p>
+            Al ser una creación personalizada, no hay devoluciones una vez iniciado el proceso. Verifica bien tu nombre,
+            apellidos, fecha y correo antes de completar el pago.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  {# ========== PROMESA EMOCIONAL ========== #}
+  <section id="promesa" class="section-home section-emotional-quotes section-soul-promise" aria-labelledby="titulo-promesa">
+    <div class="section-home-inner">
+      <h2 id="titulo-promesa" class="section-heading-home">No es una lectura cualquiera. Es una mirada hacia tu historia interior.</h2>
+      <p class="section-lead-home">
+        Hay personas que compran por curiosidad. Pero muchas terminan leyendo su mapa como si alguien hubiera puesto
+        en palabras partes de su historia que nunca habían sabido explicar.
+      </p>
+
+      <div class="emotional-quotes-grid">
+        <blockquote class="emotional-quote-card">
+          <p>“No quiero que sientas que compraste un PDF. Quiero que sientas que recibiste algo hecho para tu alma.”</p>
+        </blockquote>
+        <blockquote class="emotional-quote-card">
+          <p>“Tu nombre no se interpreta como una palabra cualquiera: se convierte en una puerta hacia tu historia interior.”</p>
+        </blockquote>
+        <blockquote class="emotional-quote-card">
+          <p>“Cada página está pensada para sentirse íntima, elegante y profundamente tuya.”</p>
+        </blockquote>
+      </div>
+    </div>
+  </section>
+
+  {# ========== LO QUE PUEDE REVELAR ========== #}
+  <section id="lo-que-revela" class="section-home section-reveal-premium" aria-labelledby="titulo-revela">
+    <div class="section-home-inner">
+      <p class="delivery-premium-kicker">Lo que podrías descubrir</p>
+      <h2 id="titulo-revela" class="section-heading-home">Tu Mapa del Alma abre capas que no siempre sabes nombrar</h2>
+      <p class="section-lead-home">
+        No se trata solo de datos. Se trata de convertir tu nombre, tus símbolos y tu energía en una lectura íntima y visualmente memorable.
+      </p>
+
+      <div class="reveal-card-grid">
+        <article class="reveal-card"><span>✦</span><h3>Tu esencia</h3><p>La energía emocional que proyecta tu nombre y cómo se siente tu presencia.</p></article>
+        <article class="reveal-card"><span>☾</span><h3>Tu historia interior</h3><p>Patrones, heridas simbólicas y mensajes que pueden ayudarte a comprenderte mejor.</p></article>
+        <article class="reveal-card"><span>✧</span><h3>Tu propósito</h3><p>Una mirada hacia tu camino personal, tu fuerza interna y tus decisiones de vida.</p></article>
+        <article class="reveal-card"><span>♢</span><h3>Tu numerología</h3><p>Números, vibración simbólica y señales que acompañan tu identidad.</p></article>
+        <article class="reveal-card"><span>✺</span><h3>Tus símbolos</h3><p>Zodiaco, elemento, planeta, piedras, animal espiritual y guías de integración.</p></article>
+        <article class="reveal-card"><span>◆</span><h3>Tu regalo visual</h3><p>Un diseño editorial premium pensado para guardar, releer o regalar.</p></article>
+      </div>
+    </div>
+  </section>
+
+  {# ========== GALERÍA EDITORIAL PREMIUM ========== #}
+  <section id="vista-previa-pdf" class="section-home section-pdf section-editorial-gallery" aria-labelledby="titulo-vista-pdf">
+    <div class="section-home-inner section-home-inner-wide">
+      <p class="delivery-premium-kicker">Vista interior</p>
+      <h2 id="titulo-vista-pdf" class="section-heading-home">Así se siente abrir tu Mapa del Alma</h2>
+      <p class="section-lead-home">
+        Una estética de libro especial, con fondos simbólicos, páginas llenas de intención y una presentación que se siente como un regalo personal.
+      </p>
+
+      <div class="editorial-gallery-grid" aria-label="Galería premium del Mapa del Alma">
+        <figure class="editorial-gallery-main">
+          <img src="{{ url_for('static', filename='img/hero_mockup_principal.jpeg') }}" alt="Mockup principal del Mapa del Alma" loading="lazy" decoding="async" />
+          <figcaption>Experiencia digital con sensación editorial</figcaption>
+        </figure>
+        <figure>
+          <img src="{{ url_for('static', filename='img/preview_interior_1.jpeg') }}" alt="Página interior premium 1" loading="lazy" decoding="async" />
+          <figcaption>Páginas interiores</figcaption>
+        </figure>
+        <figure>
+          <img src="{{ url_for('static', filename='img/preview_interior_2.jpeg') }}" alt="Página interior premium 2" loading="lazy" decoding="async" />
+          <figcaption>Lectura simbólica</figcaption>
+        </figure>
+        <figure>
+          <img src="{{ url_for('static', filename='img/preview_interior_3.jpeg') }}" alt="Página interior premium 3" loading="lazy" decoding="async" />
+          <figcaption>Diseño cuidado</figcaption>
+        </figure>
+        <figure>
+          <img src="{{ url_for('static', filename='img/hero_mockup_vertical.jpeg') }}" alt="Portada vertical del Mapa del Alma" loading="lazy" decoding="async" />
+          <figcaption>Portada personalizada</figcaption>
+        </figure>
+      </div>
+
+      <p class="section-disclaimer-home">
+        Imágenes ilustrativas del estilo visual. El contenido final se adapta a cada persona. Producto digital en PDF; no incluye versión impresa.
+      </p>
+    </div>
+  </section>
+
+  {# ========== ¿CÓMO FUNCIONA? CON TONO RITUAL ========== #}
+  <section id="como-funciona" class="section-home section-how section-ritual" aria-labelledby="titulo-como">
+    <div class="section-home-inner">
+      <p class="delivery-premium-kicker">Ritual de inicio</p>
+      <h2 id="titulo-como" class="section-heading-home">Cómo comienza tu lectura personalizada</h2>
+      <p class="section-lead-home section-lead-tight">
+        Todo el proceso es simple, seguro y digital. Tú compartes tus datos; nosotras creamos una experiencia privada para ti.
       </p>
       <ol class="how-steps">
         <li class="how-step">
           <span class="how-step-num">1</span>
-          <span class="how-step-body">{{ t('index.how.step1') }}</span>
+          <span class="how-step-body">Escribes tu nombre, apellidos, email y fecha si deseas incluirla.</span>
         </li>
         <li class="how-step">
           <span class="how-step-num">2</span>
-          <span class="how-step-body">{{ t('index.how.step2') }}</span>
+          <span class="how-step-body">Se crea tu Mapa del Alma con una lectura emocional, simbólica y visualmente premium.</span>
         </li>
         <li class="how-step">
           <span class="how-step-num">3</span>
-          <span class="how-step-body">{{ t('index.how.step3') }}</span>
+          <span class="how-step-body">En 24–48 horas recibes un correo con tu link directo de Google Drive.</span>
         </li>
         <li class="how-step">
           <span class="how-step-num">4</span>
-          <span class="how-step-body">{{ t('index.how.step4') }}</span>
+          <span class="how-step-body">Descargas tu PDF dentro de los 3 días de disponibilidad y lo guardas para siempre.</span>
         </li>
       </ol>
     </div>
   </section>
 
-  {# ========== VISTA PREVIA PDF ========== #}
-  <section id="vista-previa-pdf" class="section-home section-pdf" aria-labelledby="titulo-vista-pdf">
-    <div class="section-home-inner section-home-inner-wide">
-      <h2 id="titulo-vista-pdf" class="section-heading-home">{{ t('index.preview.title') }}</h2>
-      <p class="section-lead-home">
-        {{ t('index.preview.lead') }}
-      </p>
-
-      <div class="pdf-preview-layout">
-        <div
-          id="carouselPdfMapa"
-          class="carousel slide carousel-mystic"
-          data-bs-interval="false"
-          aria-roledescription="carrusel"
-          aria-label="Vista previa de páginas de ejemplo del PDF"
-        >
-          <div class="carousel-indicators carousel-indicators-mystic">
-            <button
-              type="button"
-              data-bs-target="#carouselPdfMapa"
-              data-bs-slide-to="0"
-              class="active"
-              aria-current="true"
-              aria-label="Portada ejemplo"
-            ></button>
-            <button type="button" data-bs-target="#carouselPdfMapa" data-bs-slide-to="1" aria-label="Página 1 ejemplo"></button>
-            <button type="button" data-bs-target="#carouselPdfMapa" data-bs-slide-to="2" aria-label="Página 2 ejemplo"></button>
-            <button type="button" data-bs-target="#carouselPdfMapa" data-bs-slide-to="3" aria-label="Página 3 ejemplo"></button>
-          </div>
-          <div class="carousel-inner">
-            <div class="carousel-item active">
-              <div class="carousel-pdf-frame">
-                <img
-                  class="carousel-pdf-img d-block"
-                  src="{{ url_for('static', filename='img/demo_portada.jpeg') }}"
-                  alt="Ejemplo de portada del PDF Mapa del Alma"
-                />
-              </div>
-            </div>
-            <div class="carousel-item">
-              <div class="carousel-pdf-frame">
-                <img
-                  class="carousel-pdf-img d-block"
-                  src="{{ url_for('static', filename='img/demo_pagina_1.jpeg') }}"
-                  alt="Ejemplo de página interior 1"
-                />
-              </div>
-            </div>
-            <div class="carousel-item">
-              <div class="carousel-pdf-frame">
-                <img
-                  class="carousel-pdf-img d-block"
-                  src="{{ url_for('static', filename='img/demo_pagina_2.jpeg') }}"
-                  alt="Ejemplo de página interior 2"
-                />
-              </div>
-            </div>
-            <div class="carousel-item">
-              <div class="carousel-pdf-frame">
-                <img
-                  class="carousel-pdf-img d-block"
-                  src="{{ url_for('static', filename='img/demo_pagina_3.jpeg') }}"
-                  alt="Ejemplo de página interior 3"
-                />
-              </div>
-            </div>
-          </div>
-          <button class="carousel-control-prev" type="button" data-bs-target="#carouselPdfMapa" data-bs-slide="prev">
-            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-            <span class="visually-hidden">{{ t('index.preview.prev') }}</span>
-          </button>
-          <button class="carousel-control-next" type="button" data-bs-target="#carouselPdfMapa" data-bs-slide="next">
-            <span class="carousel-control-next-icon" aria-hidden="true"></span>
-            <span class="visually-hidden">{{ t('index.preview.next') }}</span>
-          </button>
-        </div>
-
-        <aside class="pdf-preview-thumbs" aria-label="Resumen de páginas de ejemplo">
-          <h3 class="pdf-preview-thumbs-title">{{ t('index.preview.what') }}</h3>
-          <div class="pdf-preview-thumb-grid">
-            <article class="pdf-thumb-card">
-              <img src="{{ url_for('static', filename='img/demo_portada.jpeg') }}" alt="Miniatura portada de ejemplo" />
-              <p>{{ t('index.preview.thumb1') }}</p>
-            </article>
-            <article class="pdf-thumb-card">
-              <img src="{{ url_for('static', filename='img/demo_pagina_1.jpeg') }}" alt="Miniatura página interior 1" />
-              <p>{{ t('index.preview.thumb2') }}</p>
-            </article>
-            <article class="pdf-thumb-card">
-              <img src="{{ url_for('static', filename='img/demo_pagina_2.jpeg') }}" alt="Miniatura página interior 2" />
-              <p>{{ t('index.preview.thumb3') }}</p>
-            </article>
-            <article class="pdf-thumb-card">
-              <img src="{{ url_for('static', filename='img/demo_pagina_3.jpeg') }}" alt="Miniatura página interior 3" />
-              <p>{{ t('index.preview.thumb4') }}</p>
-            </article>
-          </div>
-        </aside>
-      </div>
-
-      <p class="section-disclaimer-home">{{ t('index.preview.disclaimer') }}</p>
-    </div>
-  </section>
-
-  {# ========== MOCKUP LIBRO ========== #}
-  <section id="mockup-libro" class="section-home section-mockups" aria-labelledby="titulo-mockup">
+  {# ========== PARA QUIÉN ES ========== #}
+  <section id="para-quien" class="section-home section-audience" aria-labelledby="titulo-para-quien">
     <div class="section-home-inner">
-      <h2 id="titulo-mockup" class="section-heading-home">{{ t('index.mockup.title') }}</h2>
-      <p class="section-lead-home">
-        {{ t('index.mockup.lead') }}
+      <h2 id="titulo-para-quien" class="section-heading-home">Esto no es para todo el mundo</h2>
+      <p class="section-lead-home section-lead-tight">
+        Este mapa está hecho para personas que valoran lo emocional, lo simbólico y lo profundamente personal.
       </p>
-
-      <div class="mockup-gallery" role="group" aria-label="Ejemplos visuales en formato libro">
-        <figure class="mockup-figure">
-          <img
-            class="mockup-img"
-            src="{{ url_for('static', filename='img/mockup_libro_1.png') }}"
-            alt="Mockup ejemplo del Mapa del Alma en formato libro"
-            loading="lazy"
-            decoding="async"
-          />
-        </figure>
-        <figure class="mockup-figure">
-          <img
-            class="mockup-img"
-            src="{{ url_for('static', filename='img/mockup_libro_2.jpeg') }}"
-            alt="Segundo mockup visual del diseño en libro"
-            loading="lazy"
-            decoding="async"
-          />
-        </figure>
+      <div class="not-for-grid">
+        <div class="not-for-card">
+          <h3 class="not-for-title">No es para ti si...</h3>
+          <ul class="not-for-list">
+            <li>Buscas una lectura rápida, fría o superficial.</li>
+            <li>Solo quieres comprar un archivo sin conexión emocional.</li>
+            <li>No te interesa mirar hacia tu historia interior.</li>
+          </ul>
+        </div>
+        <div class="not-for-card">
+          <h3 class="not-for-title">Sí es para ti si...</h3>
+          <ul class="not-for-list">
+            <li>Sientes que tu nombre tiene un mensaje para ti.</li>
+            <li>Quieres comprenderte desde una mirada más íntima.</li>
+            <li>Deseas regalar algo emocional, único y memorable.</li>
+          </ul>
+        </div>
       </div>
-
-      <p class="mockup-tagline">{{ t('index.mockup.tagline') }}</p>
-      <p class="nota-digital-home" role="note">
-        <strong>{{ t('index.mockup.digital') }}</strong>
-      </p>
     </div>
   </section>
 
   {# ========== QUÉ INCLUYE ========== #}
   <section id="que-incluye" class="section-home section-includes" aria-labelledby="titulo-incluye">
     <div class="section-home-inner section-includes-card">
-      <h2 id="titulo-incluye" class="section-heading-home">{{ t('index.includes.title') }}</h2>
+      <h2 id="titulo-incluye" class="section-heading-home">¿Qué incluye tu Mapa del Alma?</h2>
       <ul class="includes-list">
-        <li>{{ t('index.includes.i1') }}</li>
-        <li>{{ t('index.includes.i2') }}</li>
-        <li>{{ t('index.includes.i3') }}</li>
-        <li>{{ t('index.includes.i4') }}</li>
-        <li>{{ t('index.includes.i5') }}</li>
-        <li>{{ t('index.includes.i6') }}</li>
-        <li>{{ t('index.includes.i7') }}</li>
-        <li>{{ t('index.includes.i8') }}</li>
+        <li>Significado profundo de tu nombre.</li>
+        <li>Linaje simbólico de tus apellidos.</li>
+        <li>Energía y esencia personal.</li>
+        <li>Zodiaco, elemento, planeta y símbolos relacionados.</li>
+        <li>Numerología y camino personal.</li>
+        <li>Animal espiritual, guía, piedras y mensajes de integración.</li>
+        <li>Diseño premium en PDF personalizado.</li>
+        <li>Más de 20 páginas creadas según cada persona.</li>
       </ul>
     </div>
   </section>
@@ -269,16 +277,16 @@
   {# ========== FRASES EMOCIONALES ========== #}
   <section class="section-home section-emotional-quotes" aria-labelledby="titulo-frases-emocionales">
     <div class="section-home-inner">
-      <h2 id="titulo-frases-emocionales" class="section-heading-home">{{ t('index.quotes.title') }}</h2>
+      <h2 id="titulo-frases-emocionales" class="section-heading-home">Lo que muchas personas buscan sin saberlo</h2>
       <div class="emotional-quotes-grid">
         <blockquote class="emotional-quote-card">
-          <p>{{ t('index.quotes.q1') }}</p>
+          <p>“Quiero entender por qué siento tanto, por qué repito ciertos ciclos y qué parte de mí necesita ser vista.”</p>
         </blockquote>
         <blockquote class="emotional-quote-card">
-          <p>{{ t('index.quotes.q2') }}</p>
+          <p>“Quiero algo que no sea común, algo que hable de mí y no de cualquiera.”</p>
         </blockquote>
         <blockquote class="emotional-quote-card">
-          <p>{{ t('index.quotes.q3') }}</p>
+          <p>“Quiero regalar algo con alma, no otro detalle que se olvida al día siguiente.”</p>
         </blockquote>
       </div>
     </div>
@@ -287,9 +295,9 @@
   {# ========== RESEÑAS (solo aprobadas) ========== #}
   <section id="resenas" class="section-home section-reviews" aria-labelledby="titulo-resenas">
     <div class="section-home-inner">
-      <h2 id="titulo-resenas" class="section-heading-home">{{ t('index.reviews.title') }}</h2>
+      <h2 id="titulo-resenas" class="section-heading-home">Lo que dicen quienes ya lo tienen</h2>
       <p class="section-lead-home section-lead-tight">
-        {{ t('index.reviews.lead') }}
+        Reseñas verificadas de clientes que ya recibieron su Mapa del Alma.
       </p>
 
       {% if resenas_resumen %}
@@ -346,7 +354,7 @@
                         <p class="review-card-public__quote">“{{ r['comentario'] }}”</p>
                         <p class="review-card-public__meta">
                           <span class="review-card-public__name">{{ r["nombre_cliente"] }}</span>
-                          <span class="text-muted"> · {{ t('index.reviews.verified_order') }}</span>
+                          <span class="text-muted"> · Pedido verificado</span>
                         </p>
                       </article>
                     {% endfor %}
@@ -369,7 +377,7 @@
       {% else %}
         <div class="review-card-public">
           <p class="review-card-public__quote mb-0">
-            {{ t('index.reviews.empty') }}
+            Aún no hay reseñas publicadas. En cuanto revisemos las primeras, aparecerán aquí.
           </p>
         </div>
       {% endif %}
@@ -380,17 +388,21 @@
   <section class="section-home section-final-cta" aria-labelledby="titulo-cta-final">
     <div class="section-home-inner">
       <p class="final-cta-text" id="titulo-cta-final">
-        {{ t('index.final.text') }}
+        Tu nombre puede parecer una palabra. Pero también puede ser una puerta.
       </p>
       <p class="final-cta-subtext">
-        {{ t('index.final.subtext') }}
+        Abre tu Mapa del Alma y descubre una lectura creada solamente para ti.
       </p>
       <div class="text-center final-cta-actions">
-        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">{{ t('index.final.cta') }}</a>
-        <p class="final-cta-trust">{{ t('index.final.trust') }}</p>
+        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Quiero descubrir mi mapa</a>
+        <p class="final-cta-trust">Pago seguro · Producto personalizado · Entrega digital por correo · Link activo por 3 días</p>
       </div>
     </div>
   </section>
+
+  <a class="mobile-sticky-cta" href="{{ url_for('main.pedido') }}" aria-label="Comprar Mapa del Alma personalizado">
+    Descubrir mi mapa · $27
+  </a>
 {% endblock %}
 
 {% block scripts %}

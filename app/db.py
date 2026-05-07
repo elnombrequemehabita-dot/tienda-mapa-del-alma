@@ -1,19 +1,27 @@
 """
-Acceso a SQLite: creación de tablas, migraciones suaves y helpers de pedidos.
+Acceso a base de datos con soporte dual:
+- PostgreSQL (produccion) cuando existe DATABASE_URL.
+- SQLite (desarrollo local) como fallback.
 
-La ruta del archivo .sqlite viene de app.config["DATABASE"] (carpeta instance/).
-Las columnas `estado`, `pdf_path`, `pdf_url`, `error_message`, `updated_at` se añaden
-automáticamente si tu base de datos era de una versión anterior.
+Actualizado para Google Drive:
+- drive_file_id: ID del archivo PDF en Google Drive.
+- drive_expires_at: fecha/hora UTC en la que el link/archivo debe expirar.
 """
 from __future__ import annotations
 
+import os
 import sqlite3
+import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 from flask import current_app, g
+from psycopg2 import connect as pg_connect
+from psycopg2.extras import DictCursor
 
 from app.order_states import ESTADO_COMPLETADO, ESTADO_PENDIENTE_PAGO
+
+logger = logging.getLogger(__name__)
 
 RESENA_ESTADO_PENDIENTE = "pendiente"
 RESENA_ESTADO_APROBADA = "aprobada"
@@ -34,15 +42,60 @@ def codigo_confirmacion_pedido(order_id: int) -> str:
     return f"MAPA-{int(order_id):06d}"
 
 
-def get_db() -> sqlite3.Connection:
+def _db_backend() -> str:
+    return "postgres" if (current_app.config.get("DATABASE_URL") or "").strip() else "sqlite"
+
+
+def _pg_sql(sql: str) -> str:
+    return sql.replace("?", "%s")
+
+
+class _PostgresConn:
+    def __init__(self, conn):
+        self._conn = conn
+
+    def execute(self, sql: str, params: tuple[Any, ...] | list[Any] = ()):
+        cur = self._conn.cursor(cursor_factory=DictCursor)
+        cur.execute(_pg_sql(sql), tuple(params))
+        return cur
+
+    def executescript(self, script: str):
+        cur = self._conn.cursor(cursor_factory=DictCursor)
+        for part in script.split(";"):
+            stmt = part.strip()
+            if not stmt:
+                continue
+            cur.execute(stmt)
+        return cur
+
+    def commit(self) -> None:
+        self._conn.commit()
+
+    def close(self) -> None:
+        self._conn.close()
+
+
+def get_db():
     """
     Devuelve una conexión a la base de datos reutilizada durante la petición HTTP.
 
     Flask guarda la conexión en g.db y la cierra al terminar la petición.
     """
     if "db" not in g:
-        g.db = sqlite3.connect(current_app.config["DATABASE"])
-        g.db.row_factory = sqlite3.Row
+        backend = _db_backend()
+        if backend == "postgres":
+            db_url = str(current_app.config.get("DATABASE_URL") or "").strip()
+            if not db_url:
+                raise RuntimeError("DATABASE_URL no configurado para PostgreSQL.")
+            if "sslmode=" not in db_url:
+                db_url = f"{db_url}{'&' if '?' in db_url else '?'}sslmode=require"
+            conn = pg_connect(db_url)
+            g.db = _PostgresConn(conn)
+        else:
+            conn = sqlite3.connect(current_app.config["DATABASE"])
+            conn.row_factory = sqlite3.Row
+            g.db = conn
+        logger.info("DB backend activo: %s", backend)
     return g.db
 
 
@@ -64,27 +117,54 @@ def init_db() -> None:
     y aplica migraciones para bases antiguas.
     """
     db = get_db()
-    db.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS pedidos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            nombre TEXT NOT NULL,
-            apellidos TEXT NOT NULL,
-            email TEXT NOT NULL,
-            telefono TEXT,
-            notas TEXT,
-            fecha_nacimiento TEXT,
-            forma_trato TEXT,
-            estado TEXT NOT NULL DEFAULT 'pendiente_pago',
-            pdf_path TEXT,
-            pdf_url TEXT,
-            error_message TEXT
-        );
-        """
-    )
-    db.commit()
+    if _db_backend() == "postgres":
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pedidos (
+                id BIGSERIAL PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                nombre TEXT NOT NULL,
+                apellidos TEXT NOT NULL,
+                email TEXT NOT NULL,
+                telefono TEXT,
+                notas TEXT,
+                fecha_nacimiento TEXT,
+                forma_trato TEXT,
+                estado TEXT NOT NULL DEFAULT 'pendiente_pago',
+                pdf_path TEXT,
+                pdf_url TEXT,
+                drive_file_id TEXT,
+                drive_expires_at TEXT,
+                error_message TEXT
+            );
+            """
+        )
+        db.commit()
+    else:
+        db.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS pedidos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                nombre TEXT NOT NULL,
+                apellidos TEXT NOT NULL,
+                email TEXT NOT NULL,
+                telefono TEXT,
+                notas TEXT,
+                fecha_nacimiento TEXT,
+                forma_trato TEXT,
+                estado TEXT NOT NULL DEFAULT 'pendiente_pago',
+                pdf_path TEXT,
+                pdf_url TEXT,
+                drive_file_id TEXT,
+                drive_expires_at TEXT,
+                error_message TEXT
+            );
+            """
+        )
+        db.commit()
     migrate_pedidos_schema()
     migrate_resenas_schema()
     migrate_notificaciones_schema()
@@ -94,21 +174,38 @@ def init_db() -> None:
 def migrate_resenas_schema() -> None:
     """Crea la tabla `resenas` si no existe."""
     db = get_db()
-    db.execute(
-        """
-        CREATE TABLE IF NOT EXISTS resenas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            pedido_id INTEGER,
-            nombre_cliente TEXT NOT NULL,
-            email_cliente TEXT NOT NULL,
-            rating INTEGER NOT NULL,
-            comentario TEXT NOT NULL,
-            estado TEXT NOT NULL DEFAULT 'pendiente',
-            created_at TEXT NOT NULL,
-            FOREIGN KEY (pedido_id) REFERENCES pedidos(id)
-        );
-        """
-    )
+    if _db_backend() == "postgres":
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS resenas (
+                id BIGSERIAL PRIMARY KEY,
+                pedido_id BIGINT,
+                nombre_cliente TEXT NOT NULL,
+                email_cliente TEXT NOT NULL,
+                rating INTEGER NOT NULL,
+                comentario TEXT NOT NULL,
+                estado TEXT NOT NULL DEFAULT 'pendiente',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE SET NULL
+            );
+            """
+        )
+    else:
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS resenas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pedido_id INTEGER,
+                nombre_cliente TEXT NOT NULL,
+                email_cliente TEXT NOT NULL,
+                rating INTEGER NOT NULL,
+                comentario TEXT NOT NULL,
+                estado TEXT NOT NULL DEFAULT 'pendiente',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (pedido_id) REFERENCES pedidos(id)
+            );
+            """
+        )
     db.commit()
 
 
@@ -117,6 +214,8 @@ def migrate_resenas_pedido_nullable() -> None:
     Convierte `pedido_id` en opcional para poder borrar pedidos y conservar reseñas.
     Idempotente: no hace nada si la columna ya admite NULL.
     """
+    if _db_backend() == "postgres":
+        return
     db = get_db()
     if not db.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='resenas'"
@@ -153,21 +252,38 @@ def migrate_resenas_pedido_nullable() -> None:
 def migrate_notificaciones_schema() -> None:
     """Crea la tabla de historial de notificaciones si no existe."""
     db = get_db()
-    db.execute(
-        """
-        CREATE TABLE IF NOT EXISTS notificaciones (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            pedido_id INTEGER NOT NULL,
-            tipo TEXT NOT NULL,
-            canal TEXT NOT NULL,
-            destinatario TEXT NOT NULL,
-            estado TEXT NOT NULL,
-            error_message TEXT,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY (pedido_id) REFERENCES pedidos(id)
-        );
-        """
-    )
+    if _db_backend() == "postgres":
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notificaciones (
+                id BIGSERIAL PRIMARY KEY,
+                pedido_id BIGINT NOT NULL,
+                tipo TEXT NOT NULL,
+                canal TEXT NOT NULL,
+                destinatario TEXT NOT NULL,
+                estado TEXT NOT NULL,
+                error_message TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE
+            );
+            """
+        )
+    else:
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notificaciones (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pedido_id INTEGER NOT NULL,
+                tipo TEXT NOT NULL,
+                canal TEXT NOT NULL,
+                destinatario TEXT NOT NULL,
+                estado TEXT NOT NULL,
+                error_message TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (pedido_id) REFERENCES pedidos(id)
+            );
+            """
+        )
     db.commit()
 
 
@@ -177,30 +293,51 @@ def migrate_pedidos_schema() -> None:
     y rellena valores por defecto de forma segura.
     """
     db = get_db()
-    rows = db.execute("PRAGMA table_info(pedidos)").fetchall()
-    if not rows:
-        return
-    cols = {r[1] for r in rows}
-    alters: list[str] = []
-    if "updated_at" not in cols:
-        alters.append("ALTER TABLE pedidos ADD COLUMN updated_at TEXT")
-    if "estado" not in cols:
-        alters.append("ALTER TABLE pedidos ADD COLUMN estado TEXT")
-    if "pdf_path" not in cols:
-        alters.append("ALTER TABLE pedidos ADD COLUMN pdf_path TEXT")
-    if "pdf_url" not in cols:
-        alters.append("ALTER TABLE pedidos ADD COLUMN pdf_url TEXT")
-    if "error_message" not in cols:
-        alters.append("ALTER TABLE pedidos ADD COLUMN error_message TEXT")
-    if "apellidos" not in cols:
-        alters.append("ALTER TABLE pedidos ADD COLUMN apellidos TEXT DEFAULT ''")
-    if "fecha_nacimiento" not in cols:
-        alters.append("ALTER TABLE pedidos ADD COLUMN fecha_nacimiento TEXT")
-    if "forma_trato" not in cols:
-        alters.append("ALTER TABLE pedidos ADD COLUMN forma_trato TEXT")
-    for sql in alters:
-        db.execute(sql)
-    db.commit()
+    if _db_backend() == "postgres":
+        alters = [
+            "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS updated_at TEXT",
+            "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS estado TEXT",
+            "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS pdf_path TEXT",
+            "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS pdf_url TEXT",
+            "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS drive_file_id TEXT",
+            "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS drive_expires_at TEXT",
+            "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS error_message TEXT",
+            "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS apellidos TEXT DEFAULT ''",
+            "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS fecha_nacimiento TEXT",
+            "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS forma_trato TEXT",
+        ]
+        for sql in alters:
+            db.execute(sql)
+        db.commit()
+    else:
+        rows = db.execute("PRAGMA table_info(pedidos)").fetchall()
+        if not rows:
+            return
+        cols = {r[1] for r in rows}
+        alters: list[str] = []
+        if "updated_at" not in cols:
+            alters.append("ALTER TABLE pedidos ADD COLUMN updated_at TEXT")
+        if "estado" not in cols:
+            alters.append("ALTER TABLE pedidos ADD COLUMN estado TEXT")
+        if "pdf_path" not in cols:
+            alters.append("ALTER TABLE pedidos ADD COLUMN pdf_path TEXT")
+        if "pdf_url" not in cols:
+            alters.append("ALTER TABLE pedidos ADD COLUMN pdf_url TEXT")
+        if "drive_file_id" not in cols:
+            alters.append("ALTER TABLE pedidos ADD COLUMN drive_file_id TEXT")
+        if "drive_expires_at" not in cols:
+            alters.append("ALTER TABLE pedidos ADD COLUMN drive_expires_at TEXT")
+        if "error_message" not in cols:
+            alters.append("ALTER TABLE pedidos ADD COLUMN error_message TEXT")
+        if "apellidos" not in cols:
+            alters.append("ALTER TABLE pedidos ADD COLUMN apellidos TEXT DEFAULT ''")
+        if "fecha_nacimiento" not in cols:
+            alters.append("ALTER TABLE pedidos ADD COLUMN fecha_nacimiento TEXT")
+        if "forma_trato" not in cols:
+            alters.append("ALTER TABLE pedidos ADD COLUMN forma_trato TEXT")
+        for sql in alters:
+            db.execute(sql)
+        db.commit()
 
     db.execute(
         """
@@ -250,14 +387,39 @@ def insert_pedido(
     """
     db = get_db()
     now = utc_now_iso()
+    if _db_backend() == "postgres":
+        cur = db.execute(
+            """
+            INSERT INTO pedidos (
+                created_at, updated_at, nombre, apellidos, email,
+                telefono, notas, fecha_nacimiento, forma_trato,
+                estado, pdf_path, pdf_url, drive_file_id, drive_expires_at, error_message
+            )
+            VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, NULL, NULL, NULL, NULL, NULL)
+            RETURNING id
+            """,
+            (
+                now,
+                now,
+                nombre.strip(),
+                apellidos.strip(),
+                email.strip(),
+                fecha_nacimiento,
+                forma_trato,
+                ESTADO_PENDIENTE_PAGO,
+            ),
+        )
+        new_id = int(cur.fetchone()[0])
+        db.commit()
+        return new_id
     cur = db.execute(
         """
         INSERT INTO pedidos (
             created_at, updated_at, nombre, apellidos, email,
             telefono, notas, fecha_nacimiento, forma_trato,
-            estado, pdf_path, pdf_url, error_message
+            estado, pdf_path, pdf_url, drive_file_id, drive_expires_at, error_message
         )
-        VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, NULL, NULL, NULL)
+        VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, NULL, NULL, NULL, NULL, NULL)
         """,
         (
             now,
@@ -339,6 +501,31 @@ def list_pedidos_por_estados(estados: tuple[str, ...], limit: int = 300):
     return cur.fetchall()
 
 
+def list_pedidos_drive_expirados(limit: int = 200):
+    """
+    Lista pedidos con archivo de Google Drive vencido.
+
+    Se usa para borrar automáticamente PDFs cuyo link ya cumplió 72 horas.
+    """
+    db = get_db()
+    now = utc_now_iso()
+    cur = db.execute(
+        """
+        SELECT *
+        FROM pedidos
+        WHERE drive_file_id IS NOT NULL
+          AND trim(drive_file_id) != ''
+          AND drive_expires_at IS NOT NULL
+          AND trim(drive_expires_at) != ''
+          AND drive_expires_at <= ?
+        ORDER BY drive_expires_at ASC, id ASC
+        LIMIT ?
+        """,
+        (now, limit),
+    )
+    return cur.fetchall()
+
+
 def delete_pedido(order_id: int) -> int:
     """Elimina un pedido por id. Devuelve cantidad de filas borradas."""
     migrate_resenas_pedido_nullable()
@@ -369,6 +556,8 @@ def update_pedido_campos(
     estado: Any = UNSET,
     pdf_path: Any = UNSET,
     pdf_url: Any = UNSET,
+    drive_file_id: Any = UNSET,
+    drive_expires_at: Any = UNSET,
     error_message: Any = UNSET,
     clear_error: bool = False,
 ) -> None:
@@ -399,11 +588,32 @@ def update_pedido_campos(
     if pdf_url is not UNSET:
         sets.append("pdf_url = ?")
         vals.append(pdf_url)
+    if drive_file_id is not UNSET:
+        sets.append("drive_file_id = ?")
+        vals.append(drive_file_id)
+    if drive_expires_at is not UNSET:
+        sets.append("drive_expires_at = ?")
+        vals.append(drive_expires_at)
 
     vals.append(order_id)
     sql = f"UPDATE pedidos SET {', '.join(sets)} WHERE id = ?"
     db.execute(sql, vals)
     db.commit()
+
+
+def marcar_drive_expirado(order_id: int, mensaje: str = "Link de Google Drive expirado y archivo eliminado.") -> None:
+    """
+    Limpia datos de Drive tras borrar el archivo expirado.
+
+    Mantiene pdf_path local y el estado del pedido, pero invalida el link público.
+    """
+    update_pedido_campos(
+        order_id,
+        pdf_url="",
+        drive_file_id="",
+        drive_expires_at="",
+        error_message=mensaje,
+    )
 
 
 def insert_resena(
@@ -417,6 +627,26 @@ def insert_resena(
     """Inserta reseña en estado pendiente. No valida duplicados (hazlo en la ruta)."""
     db = get_db()
     now = utc_now_iso()
+    if _db_backend() == "postgres":
+        cur = db.execute(
+            """
+            INSERT INTO resenas (pedido_id, nombre_cliente, email_cliente, rating, comentario, estado, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
+            """,
+            (
+                pedido_id,
+                nombre_cliente.strip(),
+                email_cliente.strip(),
+                int(rating),
+                comentario.strip(),
+                RESENA_ESTADO_PENDIENTE,
+                now,
+            ),
+        )
+        new_id = int(cur.fetchone()[0])
+        db.commit()
+        return new_id
     cur = db.execute(
         """
         INSERT INTO resenas (pedido_id, nombre_cliente, email_cliente, rating, comentario, estado, created_at)
@@ -562,6 +792,26 @@ def insert_notificacion(
     """Guarda en historial una notificación enviada o fallida."""
     db = get_db()
     now = utc_now_iso()
+    if _db_backend() == "postgres":
+        cur = db.execute(
+            """
+            INSERT INTO notificaciones (pedido_id, tipo, canal, destinatario, estado, error_message, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
+            """,
+            (
+                pedido_id,
+                str(tipo).strip(),
+                str(canal).strip(),
+                str(destinatario).strip(),
+                str(estado).strip(),
+                (error_message or None),
+                now,
+            ),
+        )
+        new_id = int(cur.fetchone()[0])
+        db.commit()
+        return new_id
     cur = db.execute(
         """
         INSERT INTO notificaciones (pedido_id, tipo, canal, destinatario, estado, error_message, created_at)

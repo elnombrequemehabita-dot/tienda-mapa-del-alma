@@ -1,388 +1,1033 @@
-"""
-Servicios del flujo automático de pedidos:
-pago confirmado -> generación de PDF -> subida a Cloudinary -> envío al cliente -> notificaciones.
-"""
+# app/order_services.py
+
 from __future__ import annotations
 
+import json
 import logging
-import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-from flask import current_app, url_for
+from flask import current_app
 
-from app import cloudinary_storage
-from app import db as database
-from app import email_service
-from app import pdf_generator
-from app.order_states import (
-    ESTADO_COMPLETADO,
-    ESTADO_ENVIANDO_EMAIL,
-    ESTADO_ERROR_ENVIO,
-    ESTADO_ERROR_GENERACION,
-    ESTADO_GENERANDO_PDF,
-    ESTADO_PAGADO,
-    ESTADO_PDF_GENERADO,
-    ESTADO_PENDIENTE_PAGO,
-    ESTADO_REVISION_MANUAL,
-)
-from app.review_token import token_para_pedido
+from app.db import get_db
+from app.pdf_generator import generar_pdf_desde_tienda
+
+try:
+    from app.openai_generator import generar_contenido_mapa
+except Exception:
+    generar_contenido_mapa = None
+
+try:
+    from app.email_service import (
+        enviar_email_pedido_completado,
+        enviar_email_admin_error,
+    )
+except Exception:
+    enviar_email_pedido_completado = None
+    enviar_email_admin_error = None
+
+try:
+    from app.google_drive_oauth import (
+        subir_pdf_a_drive_oauth,
+        eliminar_archivo_drive_oauth,
+    )
+except Exception:
+    subir_pdf_a_drive_oauth = None
+    eliminar_archivo_drive_oauth = None
+
 
 logger = logging.getLogger(__name__)
-_ATASCO_MARKER = "[AUTO_TIMEOUT_20M]"
-_ATASCO_STATES = (
-    ESTADO_PENDIENTE_PAGO,
-    ESTADO_PAGADO,
-    ESTADO_GENERANDO_PDF,
-    ESTADO_PDF_GENERADO,
-    ESTADO_ENVIANDO_EMAIL,
-)
+
+ESTADO_PENDIENTE_PAGO = "pendiente_pago"
+ESTADO_PAGADO = "pagado"
+ESTADO_GENERANDO_PDF = "generando_pdf"
+ESTADO_PDF_GENERADO = "pdf_generado"
+ESTADO_COMPLETADO = "completado"
+ESTADO_ERROR = "error"
+
+DRIVE_EXPIRACION_HORAS = 72
 
 
-def _log_notif(
-    *,
-    pedido_id: int,
-    tipo: str,
-    canal: str,
-    destinatario: str,
-    ok: bool,
-    error_message: str = "",
-) -> None:
-    database.insert_notificacion(
-        pedido_id=pedido_id,
-        tipo=tipo,
-        canal=canal,
-        destinatario=destinatario,
-        estado="enviado" if ok else "error",
-        error_message=(error_message or None),
-    )
+# =========================================================
+# HELPERS
+# =========================================================
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
-def _parse_iso_dt(value: str) -> datetime | None:
+def _iso(dt: datetime) -> str:
+    return dt.isoformat()
+
+
+def _parse_datetime(value: Any) -> Optional[datetime]:
     if not value:
         return None
-    raw = str(value).strip()
-    if not raw:
-        return None
-    # fromisoformat no acepta 'Z' puro en algunas versiones
-    raw = raw.replace("Z", "+00:00")
+
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
     try:
-        dt = datetime.fromisoformat(raw)
-    except ValueError:
+        text = str(value).strip().replace("Z", "+00:00")
+        dt = datetime.fromisoformat(text)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
         return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
 
 
-def detectar_pedidos_atascados(timeout_minutes: int = 20) -> int:
-    """
-    Detecta pedidos no finalizados atascados más de `timeout_minutes`,
-    los pasa a `revision_manual` y avisa al admin una sola vez.
-    """
-    now = datetime.now(timezone.utc)
-    umbral = now - timedelta(minutes=timeout_minutes)
-    rows = database.list_pedidos_por_estados(_ATASCO_STATES, limit=500)
-    marcados = 0
+def _db_placeholder() -> str:
+    database_url = str(current_app.config.get("DATABASE_URL", "") or "")
+    if database_url.startswith("postgres"):
+        return "%s"
+    return "?"
 
+
+def _execute(db, sql: str, params: tuple = ()):
+    cur = db.cursor()
+    cur.execute(sql, params)
+    return cur
+
+
+def _commit(db):
+    try:
+        db.commit()
+    except Exception:
+        pass
+
+
+def _rollback(db):
+    try:
+        db.rollback()
+    except Exception:
+        pass
+
+
+def _fetchone_dict(cursor) -> Optional[Dict[str, Any]]:
+    row = cursor.fetchone()
+    if row is None:
+        return None
+
+    try:
+        return dict(row)
+    except Exception:
+        columns = [col[0] for col in cursor.description]
+        return dict(zip(columns, row))
+
+
+def _fetchall_dict(cursor) -> List[Dict[str, Any]]:
+    rows = cursor.fetchall()
+    if not rows:
+        return []
+
+    result = []
     for row in rows:
-        ts = _parse_iso_dt(str(row["updated_at"] or row["created_at"] or ""))
-        if ts is None or ts > umbral:
-            continue
-
-        existente = str(row["error_message"] or "")
-        if _ATASCO_MARKER in existente:
-            continue
-
-        order_id = int(row["id"])
-        msg = (
-            f"{_ATASCO_MARKER} Pedido sin completar en más de {timeout_minutes} minutos. "
-            f"Estado actual: {row['estado']}. Ultima actualización (UTC): {row['updated_at'] or row['created_at']}."
-        )
-        database.update_pedido_campos(
-            order_id,
-            estado=ESTADO_REVISION_MANUAL,
-            error_message=msg,
-        )
-        ok = email_service.notify_admin_error(
-            order_id,
-            "timeout_flujo",
-            msg,
-            database.get_pedido_by_id(order_id),
-        )
-        _log_notif(
-            pedido_id=order_id,
-            tipo="admin_timeout_flujo",
-            canal="email",
-            destinatario=email_service.get_admin_email(),
-            ok=ok,
-            error_message=msg,
-        )
-        marcados += 1
-
-    return marcados
-
-
-def _pdf_output_paths(order_id: int) -> tuple[str, str]:
-    """
-    Devuelve (ruta_relativa, ruta_absoluta) en carpeta output del proyecto.
-    """
-    project_root = os.path.dirname(current_app.root_path)
-    output_dir = os.path.join(project_root, "output")
-    os.makedirs(output_dir, exist_ok=True)
-    filename = f"mapa_alma_{order_id}.pdf"
-    absolute = os.path.join(output_dir, filename)
-    relative = f"output/{filename}"
-    return relative, absolute
-
-
-def generar_pdf_automatico(order_id: int) -> str:
-    """
-    Genera el PDF real personalizado del pedido, lo sube a Cloudinary y devuelve su URL segura.
-    """
-    pedido = database.get_pedido_by_id(order_id)
-    if pedido is None:
-        raise ValueError(f"No existe el pedido #{order_id}")
-    if pedido["estado"] != ESTADO_PAGADO:
-        raise RuntimeError(
-            f"No se puede generar PDF para pedido #{order_id} porque estado={pedido['estado']} (se requiere pagado)."
-        )
-
-    logger.info("USANDO GENERADOR REAL")
-    logger.info("GENERANDO PDF REAL PARA PEDIDO #%s...", order_id)
-    database.update_pedido_campos(order_id, estado=ESTADO_GENERANDO_PDF, clear_error=True)
-    relative, absolute = _pdf_output_paths(order_id)
-    nombre = str(pedido["nombre"] or "").strip()
-    apellidos = str(pedido["apellidos"] or "").strip()
-    fecha_nacimiento = str(pedido["fecha_nacimiento"] or "").strip()
-    forma_trato = str(pedido["forma_trato"] or "").strip()
-    idioma = str(pedido["idioma"] or "").strip() if "idioma" in pedido.keys() else "es"
-    email = str(pedido["email"] or "").strip()
-
-    pdf_bytes = pdf_generator.generate_real_mapa_pdf(
-        pedido_id=int(pedido["id"]),
-        codigo_confirmacion=database.codigo_confirmacion_pedido(int(pedido["id"])),
-        nombre=nombre,
-        apellidos=apellidos,
-        fecha_nacimiento=fecha_nacimiento,
-        forma_trato=forma_trato,
-        email=email,
-        idioma=idioma,
-    )
-    with open(absolute, "wb") as f:
-        f.write(pdf_bytes)
-    logger.info("PDF REAL GENERADO EN: %s", absolute)
-    logger.info("TAMAÑO PDF REAL: %s bytes", len(pdf_bytes))
-
-    database.update_pedido_campos(order_id, pdf_path=relative, clear_error=True)
-    logger.info("PDF_PATH REAL = %s", relative)
-    logger.info("SUBIENDO PDF REAL A CLOUDINARY...")
-    pdf_url = cloudinary_storage.upload_pdf(order_id, absolute)
-    logger.info("PDF_URL REAL = %s", pdf_url)
-    logger.info("PDF REAL SUBIDO A CLOUDINARY: %s", pdf_url)
-    database.update_pedido_campos(
-        order_id,
-        estado=ESTADO_PDF_GENERADO,
-        pdf_url=pdf_url,
-        clear_error=True,
-    )
-    return pdf_url
-
-
-def _build_resena_url(order_id: int) -> str:
-    tok = token_para_pedido(order_id, current_app.secret_key)
-    return url_for("main.dejar_resena", token=tok, _external=True)
-
-
-def enviar_pdf_cliente(order_id: int, pdf_url: str) -> None:
-    """
-    Envía por email un enlace de descarga y marca pedido completado.
-    """
-    pedido = database.get_pedido_by_id(order_id)
-    if pedido is None:
-        raise ValueError(f"No existe el pedido #{order_id}")
-    database.update_pedido_campos(order_id, estado=ESTADO_ENVIANDO_EMAIL, clear_error=True)
-    pedido = database.get_pedido_by_id(order_id)
-    if pedido is None:
-        raise ValueError(f"No existe el pedido #{order_id}")
-    pdf_path_db = str(pedido["pdf_path"] or "").strip()
-    pdf_url_db = str(pedido["pdf_url"] or "").strip()
-    if not pdf_path_db:
-        raise RuntimeError(f"Pedido #{order_id} sin pdf_path en base de datos.")
-    if not pdf_url_db:
-        raise RuntimeError(f"Pedido #{order_id} sin pdf_url en base de datos.")
-    expected_path = f"output/mapa_alma_{int(order_id)}.pdf"
-    if pdf_path_db != expected_path:
-        raise RuntimeError(
-            f"Pedido #{order_id} con pdf_path inesperado: {pdf_path_db} (esperado: {expected_path})"
-        )
-    if pdf_url and str(pdf_url).strip() != pdf_url_db:
-        logger.warning(
-            "pdf_url en memoria difiere de BD para pedido #%s; se usará valor persistido.",
-            order_id,
-        )
-    if not pdf_url_db.startswith("https://res.cloudinary.com/"):
-        raise RuntimeError(f"pdf_url inválida para pedido #{order_id}: {pdf_url_db}")
-    logger.info("PDF_PATH REAL = %s", pdf_path_db)
-    logger.info("PDF_URL REAL = %s", pdf_url_db)
-    logger.info("ENVIANDO PDF REAL...")
-    resena_url = _build_resena_url(order_id)
-    email_service.send_customer_pdf_email(pedido, pdf_url=pdf_url_db, resena_url=resena_url)
-    logger.info("PDF REAL ENVIADO POR LINK...")
-    _log_notif(
-        pedido_id=order_id,
-        tipo="cliente_link_descarga_enviado",
-        canal="email",
-        destinatario=str(pedido["email"]),
-        ok=True,
-    )
-    database.update_pedido_campos(order_id, estado=ESTADO_COMPLETADO, clear_error=True)
-    pedido_final = database.get_pedido_by_id(order_id)
-    if pedido_final is not None:
-        ok_admin = email_service.notify_admin_envio_cliente_ok(pedido_final)
-        _log_notif(
-            pedido_id=order_id,
-            tipo="admin_pedido_enviado_cliente",
-            canal="email",
-            destinatario=email_service.get_admin_email(),
-            ok=ok_admin,
-        )
-
-
-def procesar_post_pago(
-    order_id: int, *, stripe_checkout_session_id: str | None = None
-) -> None:
-    """
-    Flujo automático post-pago (invocado desde el webhook Stripe):
-    pagado -> notificar admin -> generar_pdf -> enviar_email -> completado.
-    Si falla PDF o email al cliente, deja estado de error y notifica al admin del fallo.
-    """
-    pedido = database.get_pedido_by_id(order_id)
-    if pedido is None:
-        raise ValueError(f"No existe el pedido #{order_id}")
-
-    # idempotencia básica: no reprocesar completados
-    if pedido["estado"] == ESTADO_COMPLETADO:
-        return
-
-    if pedido["estado"] != ESTADO_PENDIENTE_PAGO:
-        logger.warning(
-            "procesar_post_pago omitido: pedido #%s estado=%s (solo se procesa pendiente_pago)",
-            order_id,
-            pedido["estado"],
-        )
-        return
-
-    database.update_pedido_campos(order_id, estado=ESTADO_PAGADO, clear_error=True)
-    pedido_pagado = database.get_pedido_by_id(order_id)
-    if pedido_pagado is not None:
-        ok_admin_pago = email_service.notify_admin_pago_confirmado(
-            pedido_pagado, stripe_checkout_session_id=stripe_checkout_session_id
-        )
-        _log_notif(
-            pedido_id=order_id,
-            tipo="admin_pago_confirmado",
-            canal="email",
-            destinatario=email_service.get_admin_email(),
-            ok=ok_admin_pago,
-        )
-
-    try:
-        pdf_url = generar_pdf_automatico(order_id)
-    except Exception as exc:  # noqa: BLE001
-        logger.error("Fallo en generación/subida de PDF para pedido #%s: %s", order_id, exc)
-        database.update_pedido_campos(order_id, estado=ESTADO_ERROR_GENERACION, error_message=str(exc))
-        ok = email_service.notify_admin_error(order_id, "generacion_pdf", str(exc), database.get_pedido_by_id(order_id))
-        _log_notif(
-            pedido_id=order_id,
-            tipo="admin_error_generacion_pdf",
-            canal="email",
-            destinatario=email_service.get_admin_email(),
-            ok=ok,
-            error_message=str(exc),
-        )
-        return
-
-    try:
-        database.update_pedido_campos(order_id, pdf_url=pdf_url, clear_error=True)
-        enviar_pdf_cliente(order_id, pdf_url)
-    except Exception as exc:  # noqa: BLE001
-        database.update_pedido_campos(order_id, estado=ESTADO_ERROR_ENVIO, error_message=str(exc))
-        ok = email_service.notify_admin_error(order_id, "envio_email", str(exc), database.get_pedido_by_id(order_id))
-        _log_notif(
-            pedido_id=order_id,
-            tipo="admin_error_envio_email",
-            canal="email",
-            destinatario=email_service.get_admin_email(),
-            ok=ok,
-            error_message=str(exc),
-        )
-
-
-def reenviar_notificaciones_pedido(order_id: int) -> dict[str, bool]:
-    """
-    Reenvía notificaciones relevantes según el estado actual del pedido.
-    """
-    pedido = database.get_pedido_by_id(order_id)
-    if pedido is None:
-        raise ValueError(f"No existe el pedido #{order_id}")
-
-    resultados: dict[str, bool] = {}
-    estado = str(pedido["estado"])
-
-    if estado in (ESTADO_PAGADO, ESTADO_GENERANDO_PDF, ESTADO_PDF_GENERADO, ESTADO_ENVIANDO_EMAIL, ESTADO_COMPLETADO):
-        ok_pago = email_service.notify_admin_pago_confirmado(pedido, stripe_checkout_session_id=None)
-        _log_notif(
-            pedido_id=order_id,
-            tipo="admin_pago_confirmado_reenvio",
-            canal="email",
-            destinatario=email_service.get_admin_email(),
-            ok=ok_pago,
-        )
-        resultados["admin_pago_confirmado"] = ok_pago
-
-    if estado in (ESTADO_ERROR_GENERACION, ESTADO_ERROR_ENVIO, ESTADO_REVISION_MANUAL):
-        stage = "generacion_pdf" if estado == ESTADO_ERROR_GENERACION else "envio_email"
-        msg = str(pedido["error_message"] or "Reenvio manual de alerta desde admin.")
-        ok_err = email_service.notify_admin_error(order_id, stage, msg, pedido)
-        _log_notif(
-            pedido_id=order_id,
-            tipo=f"admin_error_reenvio_{stage}",
-            canal="email",
-            destinatario=email_service.get_admin_email(),
-            ok=ok_err,
-            error_message=msg,
-        )
-        resultados["admin_error"] = ok_err
-
-    pdf_url = str(pedido["pdf_url"] or "").strip()
-    if estado == ESTADO_COMPLETADO and pdf_url:
-        review_url = _build_resena_url(order_id)
-
-        ok_cliente = False
-        error_cliente = ""
         try:
-            email_service.send_customer_pdf_email(pedido, pdf_url=pdf_url, resena_url=review_url)
-            ok_cliente = True
-        except Exception as exc:  # noqa: BLE001
-            error_cliente = str(exc)
-        _log_notif(
-            pedido_id=order_id,
-            tipo="cliente_link_descarga_reenvio",
-            canal="email",
-            destinatario=str(pedido["email"]),
-            ok=ok_cliente,
-            error_message=error_cliente,
-        )
-        resultados["cliente_pdf"] = ok_cliente
+            result.append(dict(row))
+        except Exception:
+            columns = [col[0] for col in cursor.description]
+            result.append(dict(zip(columns, row)))
+    return result
 
-        ok_admin_envio = email_service.notify_admin_envio_cliente_ok(database.get_pedido_by_id(order_id) or pedido)
-        _log_notif(
-            pedido_id=order_id,
-            tipo="admin_pedido_enviado_cliente_reenvio",
-            canal="email",
-            destinatario=email_service.get_admin_email(),
-            ok=ok_admin_envio,
-        )
-        resultados["admin_pedido_enviado"] = ok_admin_envio
 
-    return resultados
+def _column_exists(db, table: str, column: str) -> bool:
+    try:
+        cur = db.cursor()
+        cur.execute(f"PRAGMA table_info({table})")
+        cols = [r[1] for r in cur.fetchall()]
+        return column in cols
+    except Exception:
+        return True
+
+
+def _safe_update_pedido(order_id: int, campos: Dict[str, Any]) -> None:
+    if not campos:
+        return
+
+    db = get_db()
+    ph = _db_placeholder()
+
+    campos_validos = {}
+    for col, val in campos.items():
+        if _column_exists(db, "pedidos", col):
+            campos_validos[col] = val
+
+    if not campos_validos:
+        logger.warning("No hay columnas válidas para actualizar pedido #%s", order_id)
+        return
+
+    sets = ", ".join([f"{col} = {ph}" for col in campos_validos.keys()])
+    values = tuple(campos_validos.values()) + (order_id,)
+
+    sql = f"""
+        UPDATE pedidos
+        SET {sets}
+        WHERE id = {ph}
+    """
+
+    _execute(db, sql, values)
+    _commit(db)
+
+
+def _project_root() -> Path:
+    return Path(current_app.root_path).resolve().parent
+
+
+# =========================================================
+# PEDIDOS
+# =========================================================
+
+def obtener_pedido(order_id: int) -> Optional[Dict[str, Any]]:
+    db = get_db()
+    ph = _db_placeholder()
+
+    cur = _execute(
+        db,
+        f"SELECT * FROM pedidos WHERE id = {ph}",
+        (order_id,),
+    )
+
+    return _fetchone_dict(cur)
+
+
+def marcar_estado(order_id: int, estado: str, error: Optional[str] = None) -> None:
+    campos = {
+        "estado": estado,
+        "updated_at": _iso(_utc_now()),
+    }
+
+    if error:
+        if _column_exists(get_db(), "pedidos", "error_message"):
+            campos["error_message"] = str(error)
+        elif _column_exists(get_db(), "pedidos", "error"):
+            campos["error"] = str(error)
+
+    _safe_update_pedido(order_id, campos)
+
+
+def marcar_pedido_pagado(order_id: int) -> None:
+    marcar_estado(order_id, ESTADO_PAGADO)
+
+
+def marcar_completado(order_id: int) -> None:
+    marcar_estado(order_id, ESTADO_COMPLETADO)
+
+
+def marcar_error(order_id: int, error: str) -> None:
+    marcar_estado(order_id, ESTADO_ERROR, error)
+
+
+def _normalizar_pedido_para_pdf(pedido: Dict[str, Any]) -> Dict[str, Any]:
+    data = dict(pedido)
+
+    data.setdefault("pedido_id", pedido.get("id"))
+    data.setdefault("order_id", pedido.get("id"))
+
+    if "nombre" not in data or not data.get("nombre"):
+        data["nombre"] = (
+            pedido.get("nombre_cliente")
+            or pedido.get("first_name")
+            or pedido.get("cliente_nombre")
+            or ""
+        )
+
+    if "apellidos" not in data or not data.get("apellidos"):
+        data["apellidos"] = (
+            pedido.get("apellidos_cliente")
+            or pedido.get("last_name")
+            or pedido.get("cliente_apellidos")
+            or ""
+        )
+
+    if "fecha_nacimiento" not in data or not data.get("fecha_nacimiento"):
+        data["fecha_nacimiento"] = (
+            pedido.get("birth_date")
+            or pedido.get("fecha")
+            or pedido.get("nacimiento")
+            or ""
+        )
+
+    if "sexo" not in data or not data.get("sexo"):
+        data["sexo"] = (
+            pedido.get("genero")
+            or pedido.get("gender")
+            or ""
+        )
+
+    return data
+
+
+# =========================================================
+# REUTILIZACION DE JSON OPENAI
+# =========================================================
+
+def _cargar_json_si_existe(path: Path) -> Optional[Dict[str, Any]]:
+    try:
+        if not path.exists() or not path.is_file():
+            return None
+
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if isinstance(data, dict) and data:
+            logger.info("JSON OpenAI reutilizado desde: %s", path)
+            return data
+
+    except Exception:
+        logger.exception("No se pudo leer JSON existente: %s", path)
+
+    return None
+
+
+def _buscar_json_openai_guardado(order_id: int, pedido: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Busca contenido OpenAI ya guardado para NO gastar saldo otra vez.
+
+    Revisa:
+    1. Columnas posibles en DB.
+    2. Rutas comunes en output/.
+    3. Cualquier JSON relacionado con el pedido_id.
+    """
+
+    posibles_columnas = [
+        "contenido_openai",
+        "openai_json",
+        "json_openai",
+        "contenido_json",
+        "json_guardado",
+    ]
+
+    for col in posibles_columnas:
+        value = pedido.get(col)
+
+        if not value:
+            continue
+
+        if isinstance(value, dict):
+            logger.info("Contenido OpenAI reutilizado desde columna DB: %s", col)
+            return value
+
+        if isinstance(value, str):
+            text = value.strip()
+
+            if not text:
+                continue
+
+            if text.startswith("{"):
+                try:
+                    data = json.loads(text)
+                    if isinstance(data, dict) and data:
+                        logger.info("Contenido OpenAI reutilizado desde JSON DB: %s", col)
+                        return data
+                except Exception:
+                    pass
+
+            posible_path = Path(text)
+            if not posible_path.is_absolute():
+                posible_path = _project_root() / posible_path
+
+            data = _cargar_json_si_existe(posible_path)
+            if data:
+                return data
+
+    root = _project_root()
+
+    posibles_paths = [
+        root / "output" / "json" / f"pedido_{order_id}.json",
+        root / "output" / "json" / f"mapa_alma_{order_id}.json",
+        root / "output" / "openai" / f"pedido_{order_id}.json",
+        root / "output" / "openai" / f"mapa_alma_{order_id}.json",
+        root / "output" / "contenido" / f"pedido_{order_id}.json",
+        root / "output" / "contenido_openai" / f"pedido_{order_id}.json",
+        root / "output" / f"pedido_{order_id}.json",
+        root / "output" / f"mapa_alma_{order_id}.json",
+    ]
+
+    for path in posibles_paths:
+        data = _cargar_json_si_existe(path)
+        if data:
+            return data
+
+    output_dir = root / "output"
+
+    try:
+        if output_dir.exists():
+            patrones = [
+                f"*{order_id}*.json",
+                f"pedido_{order_id}_*.json",
+                f"mapa_alma_{order_id}_*.json",
+            ]
+
+            for patron in patrones:
+                for path in output_dir.rglob(patron):
+                    data = _cargar_json_si_existe(path)
+                    if data:
+                        return data
+    except Exception:
+        logger.exception("Error buscando JSON OpenAI guardado para pedido #%s", order_id)
+
+    return None
+
+
+def _asegurar_contenido_openai(data_pdf: Dict[str, Any], pedido: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Regla de oro:
+    - Si ya existe contenido, reutilizar.
+    - Si existe JSON guardado, reutilizar.
+    - Solo si no existe nada, llamar OpenAI.
+    """
+
+    order_id = int(data_pdf.get("pedido_id") or data_pdf.get("id") or pedido.get("id"))
+
+    if data_pdf.get("contenido_openai"):
+        logger.info("Pedido #%s ya trae contenido_openai. No se llama OpenAI.", order_id)
+        return data_pdf
+
+    if data_pdf.get("secciones"):
+        logger.info("Pedido #%s trae secciones. No se llama OpenAI.", order_id)
+        data_pdf["contenido_openai"] = data_pdf["secciones"]
+        return data_pdf
+
+    contenido_guardado = _buscar_json_openai_guardado(order_id, pedido)
+
+    if contenido_guardado:
+        data_pdf["contenido_openai"] = contenido_guardado
+        data_pdf["_reutilizado"] = True
+        return data_pdf
+
+    if generar_contenido_mapa is None:
+        raise RuntimeError(
+            "No se pudo importar app.openai_generator.generar_contenido_mapa."
+        )
+
+    logger.warning(
+        "Pedido #%s NO tiene JSON guardado. Se llamará OpenAI UNA sola vez para este pedido.",
+        order_id,
+    )
+
+    contenido = generar_contenido_mapa(data_pdf)
+
+    if not contenido:
+        raise RuntimeError("OpenAI no devolvió contenido válido.")
+
+    data_pdf["contenido_openai"] = contenido
+    data_pdf["_reutilizado"] = bool(
+        isinstance(contenido, dict) and contenido.get("_reutilizado")
+    )
+
+    return data_pdf
+
+
+# =========================================================
+# GOOGLE DRIVE
+# =========================================================
+
+def _crear_link_local(order_id: int) -> str:
+    base_url = (
+        current_app.config.get("PUBLIC_BASE_URL")
+        or current_app.config.get("BASE_URL")
+        or ""
+    )
+
+    base_url = str(base_url).rstrip("/")
+
+    if base_url:
+        return f"{base_url}/descarga/{order_id}"
+
+    return f"/descarga/{order_id}"
+
+
+def _subir_pdf_drive_seguro(
+    pdf_path: str,
+    order_id: int,
+) -> Optional[Dict[str, Any]]:
+
+    if subir_pdf_a_drive_oauth is None:
+        logger.warning("Google Drive OAuth no disponible. Se usará link local.")
+        return None
+
+    archivo = Path(pdf_path)
+
+    if not archivo.exists():
+        raise FileNotFoundError(
+            f"No existe el PDF para subir a Drive: {pdf_path}"
+        )
+
+    nombre_drive = f"mapa_alma_{order_id}.pdf"
+
+    try:
+        resultado = subir_pdf_a_drive_oauth(
+            str(archivo),
+            nombre_drive,
+        )
+
+        if not isinstance(resultado, dict):
+            raise RuntimeError(
+                f"Respuesta inválida de Drive: {resultado}"
+            )
+
+        file_id = resultado.get("file_id")
+        download_link = (
+            resultado.get("download_link")
+            or resultado.get("view_link")
+        )
+
+        if not file_id or not download_link:
+            raise RuntimeError(
+                f"Drive no devolvió file_id/download_link: {resultado}"
+            )
+
+        logger.info(
+            "PDF subido a Drive correctamente. Pedido #%s file_id=%s",
+            order_id,
+            file_id,
+        )
+
+        return {
+            "file_id": file_id,
+            "download_link": download_link,
+            "view_link": resultado.get("view_link") or download_link,
+            "name": resultado.get("name") or nombre_drive,
+        }
+
+    except Exception as e:
+        logger.exception(
+            "Error subiendo PDF a Drive pedido #%s: %s",
+            order_id,
+            e,
+        )
+        return None
+
+
+def _pdf_local_existente(pedido: Dict[str, Any], order_id: int) -> Optional[Path]:
+    posibles = []
+
+    if pedido.get("pdf_path"):
+        posibles.append(Path(str(pedido["pdf_path"])))
+
+    posibles.append(_project_root() / "output" / f"mapa_alma_{order_id}.pdf")
+
+    for path in posibles:
+        if not path.is_absolute():
+            path = _project_root() / path
+
+        if path.exists() and path.is_file():
+            return path
+
+    return None
+
+
+def _drive_link_vigente(pedido: Dict[str, Any]) -> bool:
+    drive_file_id = pedido.get("drive_file_id")
+    pdf_url = pedido.get("pdf_url")
+    expires_at = _parse_datetime(pedido.get("drive_expires_at"))
+
+    if not drive_file_id or not pdf_url or not expires_at:
+        return False
+
+    return expires_at > _utc_now()
+
+
+def _guardar_drive_en_db(order_id: int, pdf_path: Path, drive_result: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    expires_at = _utc_now() + timedelta(hours=DRIVE_EXPIRACION_HORAS)
+
+    if drive_result:
+        pdf_url = drive_result["download_link"]
+        drive_file_id = drive_result["file_id"]
+        drive_expires_at = _iso(expires_at)
+    else:
+        pdf_url = _crear_link_local(order_id)
+        drive_file_id = None
+        drive_expires_at = None
+
+    _safe_update_pedido(
+        order_id,
+        {
+            "estado": ESTADO_PDF_GENERADO,
+            "pdf_path": str(pdf_path),
+            "pdf_url": pdf_url,
+            "drive_file_id": drive_file_id,
+            "drive_expires_at": drive_expires_at,
+            "updated_at": _iso(_utc_now()),
+        },
+    )
+
+    return {
+        "ok": True,
+        "order_id": order_id,
+        "pdf_path": str(pdf_path),
+        "pdf_url": pdf_url,
+        "drive_file_id": drive_file_id,
+        "drive_expires_at": drive_expires_at,
+        "drive_usado": bool(drive_file_id),
+    }
+
+
+# =========================================================
+# EMAILS
+# =========================================================
+
+def _enviar_email_cliente_seguro(
+    pedido: Dict[str, Any],
+    pdf_url: str,
+) -> None:
+
+    if enviar_email_pedido_completado is None:
+        logger.warning(
+            "Función enviar_email_pedido_completado no disponible."
+        )
+        return
+
+    try:
+        try:
+            enviar_email_pedido_completado(
+                pedido,
+                pdf_url,
+            )
+        except TypeError:
+            enviar_email_pedido_completado(
+                email=(
+                    pedido.get("email")
+                    or pedido.get("cliente_email")
+                    or pedido.get("correo")
+                ),
+                nombre=(
+                    pedido.get("nombre")
+                    or pedido.get("nombre_cliente")
+                    or pedido.get("cliente_nombre")
+                ),
+                pdf_url=pdf_url,
+                pedido=pedido,
+            )
+
+        logger.info(
+            "Email enviado correctamente pedido #%s",
+            pedido.get("id"),
+        )
+
+    except Exception as e:
+        logger.exception(
+            "Error enviando email cliente pedido #%s: %s",
+            pedido.get("id"),
+            e,
+        )
+        raise
+
+
+def _notificar_admin_error(
+    order_id: int,
+    error: Exception,
+) -> None:
+
+    if enviar_email_admin_error is None:
+        logger.warning(
+            "No existe enviar_email_admin_error. Error pedido #%s: %s",
+            order_id,
+            error,
+        )
+        return
+
+    try:
+        try:
+            enviar_email_admin_error(
+                order_id,
+                str(error),
+            )
+        except TypeError:
+            enviar_email_admin_error(
+                asunto=f"Error pedido #{order_id}",
+                mensaje=str(error),
+            )
+    except Exception:
+        logger.exception("Falló email de error admin.")
+
+
+# =========================================================
+# GENERAR PDF AUTOMATICO
+# =========================================================
+
+def generar_pdf_automatico(order_id: int, forzar_regeneracion: bool = False) -> Dict[str, Any]:
+    """
+    Flujo seguro y económico:
+
+    CASO 1:
+    Si ya existe PDF + Drive vigente:
+        NO OpenAI
+        NO PDF nuevo
+        NO subida nueva
+        devuelve lo guardado
+
+    CASO 2:
+    Si ya existe PDF local pero falta Drive:
+        NO OpenAI
+        NO PDF nuevo
+        solo sube PDF existente a Drive
+
+    CASO 3:
+    Si no existe PDF:
+        busca JSON guardado
+        si existe, genera PDF sin llamar OpenAI
+        si no existe, llama OpenAI una sola vez
+    """
+
+    pedido = obtener_pedido(order_id)
+
+    if not pedido:
+        raise ValueError(f"No existe el pedido #{order_id}")
+
+    pdf_existente = _pdf_local_existente(pedido, order_id)
+
+    if not forzar_regeneracion and pdf_existente and _drive_link_vigente(pedido):
+        logger.info(
+            "Pedido #%s ya tiene PDF y Drive vigente. No se llama OpenAI.",
+            order_id,
+        )
+        return {
+            "ok": True,
+            "order_id": order_id,
+            "pdf_path": str(pdf_existente),
+            "pdf_url": pedido.get("pdf_url"),
+            "drive_file_id": pedido.get("drive_file_id"),
+            "drive_expires_at": pedido.get("drive_expires_at"),
+            "drive_usado": True,
+            "reutilizado": True,
+            "sin_openai": True,
+        }
+
+    if not forzar_regeneracion and pdf_existente:
+        logger.info(
+            "Pedido #%s ya tiene PDF local. Solo se subirá/reparará Drive. No se llama OpenAI.",
+            order_id,
+        )
+
+        drive_result = _subir_pdf_drive_seguro(str(pdf_existente), order_id)
+
+        resultado = _guardar_drive_en_db(order_id, pdf_existente, drive_result)
+        resultado["reutilizado"] = True
+        resultado["sin_openai"] = True
+        return resultado
+
+    marcar_estado(order_id, ESTADO_GENERANDO_PDF)
+
+    try:
+        logger.info("Generando PDF pedido #%s", order_id)
+
+        data_pdf = _normalizar_pedido_para_pdf(pedido)
+        data_pdf = _asegurar_contenido_openai(data_pdf, pedido)
+
+        resultado_pdf = generar_pdf_desde_tienda(data_pdf)
+
+        if isinstance(resultado_pdf, dict):
+            pdf_path = (
+                resultado_pdf.get("pdf_path")
+                or resultado_pdf.get("path")
+                or resultado_pdf.get("archivo")
+                or resultado_pdf.get("ruta")
+            )
+        else:
+            pdf_path = str(resultado_pdf)
+
+        if not pdf_path:
+            raise RuntimeError(
+                f"El generador PDF no devolvió ruta válida: {resultado_pdf}"
+            )
+
+        pdf_file = Path(pdf_path)
+
+        if not pdf_file.exists():
+            raise FileNotFoundError(
+                f"El PDF generado no existe: {pdf_path}"
+            )
+
+        drive_result = _subir_pdf_drive_seguro(str(pdf_file), order_id)
+        resultado = _guardar_drive_en_db(order_id, pdf_file, drive_result)
+        resultado["reutilizado"] = bool(data_pdf.get("_reutilizado"))
+        resultado["sin_openai"] = bool(data_pdf.get("_reutilizado"))
+
+        return resultado
+
+    except Exception as e:
+        _rollback(get_db())
+        marcar_estado(order_id, ESTADO_ERROR, str(e))
+        _notificar_admin_error(order_id, e)
+
+        logger.exception(
+            "Error generando PDF pedido #%s",
+            order_id,
+        )
+
+        raise
+
+
+# =========================================================
+# POST PAGO / STRIPE
+# =========================================================
+
+def procesar_post_pago(order_id: int) -> Dict[str, Any]:
+    pedido = obtener_pedido(order_id)
+
+    if not pedido:
+        raise ValueError(f"No existe el pedido #{order_id}")
+
+    estado = pedido.get("estado")
+
+    estados_validos = {
+        ESTADO_PENDIENTE_PAGO,
+        ESTADO_PAGADO,
+        ESTADO_PDF_GENERADO,
+        ESTADO_COMPLETADO,
+    }
+
+    if estado not in estados_validos:
+        logger.warning(
+            "procesar_post_pago omitido: pedido #%s estado=%s",
+            order_id,
+            estado,
+        )
+
+        return {
+            "ok": False,
+            "omitido": True,
+            "order_id": order_id,
+            "estado": estado,
+            "motivo": "Estado no procesable",
+        }
+
+    try:
+        logger.info("Procesando post-pago pedido #%s", order_id)
+
+        if estado != ESTADO_COMPLETADO:
+            marcar_estado(order_id, ESTADO_PAGADO)
+
+        resultado_pdf = generar_pdf_automatico(order_id)
+
+        pedido_actualizado = obtener_pedido(order_id) or pedido
+
+        pdf_url = resultado_pdf.get("pdf_url") or pedido_actualizado.get("pdf_url")
+
+        if not pdf_url:
+            raise RuntimeError(f"No existe pdf_url para pedido #{order_id}")
+
+        _enviar_email_cliente_seguro(
+            pedido_actualizado,
+            pdf_url,
+        )
+
+        _safe_update_pedido(
+            order_id,
+            {
+                "estado": ESTADO_COMPLETADO,
+                "updated_at": _iso(_utc_now()),
+            },
+        )
+
+        logger.info("Pedido #%s completado correctamente.", order_id)
+
+        return {
+            "ok": True,
+            "order_id": order_id,
+            "estado": ESTADO_COMPLETADO,
+            "pdf_url": pdf_url,
+            "drive_file_id": resultado_pdf.get("drive_file_id"),
+            "drive_expires_at": resultado_pdf.get("drive_expires_at"),
+            "drive_usado": resultado_pdf.get("drive_usado"),
+            "sin_openai": resultado_pdf.get("sin_openai"),
+            "reutilizado": resultado_pdf.get("reutilizado"),
+        }
+
+    except Exception as e:
+        _rollback(get_db())
+        marcar_estado(order_id, ESTADO_ERROR, str(e))
+        _notificar_admin_error(order_id, e)
+
+        logger.exception(
+            "Error procesando post pago pedido #%s",
+            order_id,
+        )
+
+        raise
+
+
+# =========================================================
+# REGENERAR PDF
+# =========================================================
+
+def regenerar_pdf_pedido(order_id: int, forzar_openai: bool = False) -> Dict[str, Any]:
+    """
+    Para admin.
+
+    Por defecto NO fuerza OpenAI:
+    - si hay PDF existente, reutiliza
+    - si hay JSON guardado, reutiliza
+    - solo si no hay nada, llama OpenAI
+
+    Si algún día quieres generar texto nuevo de cero:
+    regenerar_pdf_pedido(order_id, forzar_openai=True)
+    """
+
+    pedido = obtener_pedido(order_id)
+
+    if not pedido:
+        raise ValueError(f"No existe el pedido #{order_id}")
+
+    viejo_drive_file_id = pedido.get("drive_file_id")
+
+    if viejo_drive_file_id and eliminar_archivo_drive_oauth:
+        try:
+            eliminar_archivo_drive_oauth(viejo_drive_file_id)
+            logger.info(
+                "Archivo Drive anterior eliminado pedido #%s",
+                order_id,
+            )
+        except Exception:
+            logger.exception(
+                "No se pudo eliminar archivo Drive anterior pedido #%s",
+                order_id,
+            )
+
+    _safe_update_pedido(
+        order_id,
+        {
+            "drive_file_id": None,
+            "pdf_url": None,
+            "drive_expires_at": None,
+            "estado": ESTADO_PAGADO,
+            "updated_at": _iso(_utc_now()),
+        },
+    )
+
+    return generar_pdf_automatico(order_id, forzar_regeneracion=forzar_openai)
+
+
+# =========================================================
+# PEDIDOS ATASCADOS
+# =========================================================
+
+def detectar_pedidos_atascados(minutos: int = 30) -> List[Dict[str, Any]]:
+    db = get_db()
+    ph = _db_placeholder()
+
+    limite = _utc_now() - timedelta(minutes=minutos)
+    limite_iso = _iso(limite)
+
+    try:
+        cur = _execute(
+            db,
+            f"""
+            SELECT *
+            FROM pedidos
+            WHERE estado = {ph}
+              AND (
+                    updated_at IS NULL
+                    OR updated_at < {ph}
+                  )
+            ORDER BY id DESC
+            """,
+            (
+                ESTADO_GENERANDO_PDF,
+                limite_iso,
+            ),
+        )
+
+        pedidos = _fetchall_dict(cur)
+
+        logger.info(
+            "Pedidos atascados detectados: %s",
+            len(pedidos),
+        )
+
+        return pedidos
+
+    except Exception:
+        logger.exception("Error detectando pedidos atascados.")
+        return []
+
+
+def resetear_pedido_atascado(order_id: int) -> None:
+    marcar_estado(order_id, ESTADO_PAGADO)
+
+
+def limpiar_pedidos_atascados(minutos: int = 30) -> List[Dict[str, Any]]:
+    pedidos = detectar_pedidos_atascados(minutos=minutos)
+
+    for pedido in pedidos:
+        pedido_id = pedido.get("id")
+        if pedido_id:
+            try:
+                resetear_pedido_atascado(int(pedido_id))
+            except Exception:
+                logger.exception(
+                    "No se pudo resetear pedido atascado #%s",
+                    pedido_id,
+                )
+
+    return pedidos
+
+
+# =========================================================
+# REENVIAR NOTIFICACIONES
+# =========================================================
+
+def reenviar_notificaciones_pedido(order_id: int) -> Dict[str, Any]:
+    pedido = obtener_pedido(order_id)
+
+    if not pedido:
+        raise ValueError(f"No existe el pedido #{order_id}")
+
+    pdf_url = (
+        pedido.get("pdf_url")
+        or pedido.get("download_link")
+        or pedido.get("link_pdf")
+    )
+
+    if not pdf_url and pedido.get("pdf_path"):
+        pdf_url = _crear_link_local(order_id)
+
+    if not pdf_url:
+        raise RuntimeError(
+            f"El pedido #{order_id} no tiene pdf_url ni pdf_path para reenviar."
+        )
+
+    try:
+        _enviar_email_cliente_seguro(
+            pedido,
+            pdf_url,
+        )
+
+        logger.info(
+            "Notificación reenviada correctamente pedido #%s",
+            order_id,
+        )
+
+        return {
+            "ok": True,
+            "order_id": order_id,
+            "pdf_url": pdf_url,
+            "mensaje": "Notificación reenviada correctamente.",
+        }
+
+    except Exception as e:
+        _notificar_admin_error(order_id, e)
+
+        logger.exception(
+            "Error reenviando notificación pedido #%s",
+            order_id,
+        )
+
+        raise
+
+
+def reenviar_email_pedido(order_id: int) -> Dict[str, Any]:
+    return reenviar_notificaciones_pedido(order_id)
+
+
+def enviar_notificaciones_pedido(order_id: int) -> Dict[str, Any]:
+    return reenviar_notificaciones_pedido(order_id)
+
+
+def enviar_link_pedido(order_id: int) -> Dict[str, Any]:
+    return reenviar_notificaciones_pedido(order_id)

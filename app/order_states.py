@@ -13,6 +13,7 @@ ESTADO_PAGADO: Final[str] = "pagado"
 ESTADO_GENERANDO_PDF: Final[str] = "generando_pdf"
 ESTADO_ERROR_GENERACION: Final[str] = "error_generacion"
 ESTADO_PDF_GENERADO: Final[str] = "pdf_generado"
+ESTADO_PDF_GENERADO_PENDIENTE_DE_LINK: Final[str] = "pdf_generado_pendiente_de_link"
 ESTADO_ENVIANDO_EMAIL: Final[str] = "enviando_email"
 ESTADO_ERROR_ENVIO: Final[str] = "error_envio"
 ESTADO_COMPLETADO: Final[str] = "completado"
@@ -25,6 +26,7 @@ ORDER_STATES: Tuple[str, ...] = (
     ESTADO_GENERANDO_PDF,
     ESTADO_ERROR_GENERACION,
     ESTADO_PDF_GENERADO,
+    ESTADO_PDF_GENERADO_PENDIENTE_DE_LINK,
     ESTADO_ENVIANDO_EMAIL,
     ESTADO_ERROR_ENVIO,
     ESTADO_COMPLETADO,
@@ -37,6 +39,7 @@ ORDER_STATE_LABELS: dict[str, str] = {
     ESTADO_GENERANDO_PDF: "Generando PDF",
     ESTADO_ERROR_GENERACION: "Error al generar PDF",
     ESTADO_PDF_GENERADO: "PDF generado",
+    ESTADO_PDF_GENERADO_PENDIENTE_DE_LINK: "PDF generado, enlace pendiente",
     ESTADO_ENVIANDO_EMAIL: "Enviando email",
     ESTADO_ERROR_ENVIO: "Error al enviar email",
     ESTADO_COMPLETADO: "Completado",

@@ -45,7 +45,6 @@
           </thead>
           <tbody>
             {% for p in pedidos %}
-              {% set pdf = (p["pdf_url"] or p["pdf_path"] or "") %}
               <tr>
                 <td><strong>#{{ p["id"] }}</strong></td>
                 <td class="mono-small">{{ codigo_confirmacion_pedido(p["id"]) }}</td>
@@ -58,8 +57,12 @@
                 <td class="small text-break">
                   {% if p["pdf_url"] %}
                     <a href="{{ p['pdf_url'] }}" target="_blank" rel="noopener noreferrer">Enlace</a>
-                  {% elif pdf %}
-                    {{ pdf[:48] }}{% if pdf|length > 48 %}…{% endif %}
+                  {% elif p["pdf_path"] %}
+                    <a href="{{ url_for('main.descarga_pdf', pedido_id=p['id']) }}" target="_blank" rel="noopener noreferrer">
+                      Descarga local
+                    </a>
+                  {% elif p["estado"] == "pdf_generado_pendiente_de_link" %}
+                    PDF generado, enlace pendiente
                   {% else %}
                     —
                   {% endif %}

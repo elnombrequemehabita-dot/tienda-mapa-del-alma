@@ -85,15 +85,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "pt": "Criação personalizada. Vagas limitadas por dia.",
     },
     "index.delivery.pin": {
-        "es": "Recibirás tu Mapa del Alma en formato PDF directamente en tu correo.",
-        "en": "You will receive your Soul Map in PDF format directly in your email.",
-        "pt": "Você receberá seu Mapa da Alma em formato PDF diretamente no seu e-mail.",
+        "es": "Recibirás en tu correo un enlace directo para descargar tu Mapa del Alma en PDF.",
+        "en": "You will receive an email with a direct download link to your Soul Map PDF.",
+        "pt": "Você receberá no seu e-mail um link direto para baixar seu Mapa da Alma em PDF.",
     },
     "index.how.title": {"es": "¿Cómo funciona?", "en": "How does it work?", "pt": "Como funciona?"},
     "index.how.lead": {
-        "es": "Todo el proceso es digital: pedido, creación personalizada y envío del PDF a tu email.",
-        "en": "The whole process is digital: order, personalized creation, and PDF delivery to your email.",
-        "pt": "Todo o processo é digital: pedido, criação personalizada e envio do PDF para o seu e-mail.",
+        "es": "Todo el proceso es digital: pedido, creación personalizada y envío de un enlace de descarga a tu email.",
+        "en": "The whole process is digital: order, personalized creation, and delivery of a download link to your email.",
+        "pt": "Todo o processo é digital: pedido, criação personalizada e envio de um link de download para o seu e-mail.",
     },
     "index.how.step1": {
         "es": "Completa tu pedido con tus datos",
@@ -106,9 +106,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "pt": "Criamos seu Mapa da Alma personalizado",
     },
     "index.how.step3": {
-        "es": "Lo recibes en tu correo en formato PDF",
-        "en": "You receive it in your email as PDF",
-        "pt": "Você recebe no seu e-mail em formato PDF",
+        "es": "Recibes en tu correo un enlace para descargar tu PDF",
+        "en": "You receive an email link to download your PDF",
+        "pt": "Você recebe no seu e-mail um link para baixar seu PDF",
     },
     "index.how.step4": {
         "es": "Puedes guardarlo, imprimirlo o regalarlo",
@@ -319,9 +319,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "gracias.confirmed": {"es": "Pedido confirmado", "en": "Order confirmed", "pt": "Pedido confirmado"},
     "gracias.header": {"es": "Gracias por tu pedido", "en": "Thank you for your order", "pt": "Obrigado pelo seu pedido"},
     "gracias.msg": {
-        "es": "Hemos registrado tu solicitud de Mapa del Alma. Si el pago queda confirmado, procesaremos tu pedido y recibirás el PDF en tu correo.",
-        "en": "We have registered your Soul Map request. If payment is confirmed, we will process your order and you will receive the PDF by email.",
-        "pt": "Registramos sua solicitação do Mapa da Alma. Se o pagamento for confirmado, processaremos seu pedido e você receberá o PDF por e-mail.",
+        "es": "Hemos registrado tu solicitud de Mapa del Alma. Si el pago queda confirmado, procesaremos tu pedido y recibirás por correo un enlace de descarga directa de tu PDF.",
+        "en": "We have registered your Soul Map request. If payment is confirmed, we will process your order and email you a direct download link to your PDF.",
+        "pt": "Registramos sua solicitação do Mapa da Alma. Se o pagamento for confirmado, processaremos seu pedido e você receberá por e-mail um link direto para baixar seu PDF.",
     },
     "gracias.ref": {"es": "Referencia interna del pedido", "en": "Internal order reference", "pt": "Referência interna do pedido"},
     "gracias.code": {"es": "Código de confirmación", "en": "Confirmation code", "pt": "Código de confirmação"},

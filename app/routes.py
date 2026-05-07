@@ -7,6 +7,7 @@ import logging
 import os
 from datetime import datetime
 from functools import wraps
+from pathlib import Path
 from typing import Optional
 
 import stripe
@@ -21,6 +22,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     session,
     url_for,
 )
@@ -47,6 +49,7 @@ from app.order_states import (
     ESTADO_GENERANDO_PDF,
     ESTADO_PAGADO,
     ESTADO_PDF_GENERADO,
+    ESTADO_PDF_GENERADO_PENDIENTE_DE_LINK,
     ESTADO_PENDIENTE_PAGO,
     ESTADO_REVISION_MANUAL,
     ORDER_STATES,
@@ -63,6 +66,7 @@ ADMIN_MAIN_STATES = (
     ESTADO_GENERANDO_PDF,
     ESTADO_ERROR_GENERACION,
     ESTADO_PDF_GENERADO,
+    ESTADO_PDF_GENERADO_PENDIENTE_DE_LINK,
     ESTADO_ENVIANDO_EMAIL,
     ESTADO_ERROR_ENVIO,
     ESTADO_REVISION_MANUAL,
@@ -116,6 +120,11 @@ def _stripe_keys() -> tuple[str, str]:
 def _stripe_config_ok() -> bool:
     sk, pk = _stripe_keys()
     return bool(sk and pk)
+
+
+def _ruta_pdf_local(pedido_id: int) -> Path:
+    project_root = Path(current_app.root_path).parent
+    return (project_root / "output" / f"mapa_alma_{int(pedido_id)}.pdf").resolve()
 
 
 def _render_pedido_form(**ctx):
@@ -231,7 +240,7 @@ def _crear_checkout_desde_form():
                     "price_data": {
                         "currency": "usd",
                         "product_data": {"name": "Mapa del Alma"},
-                        "unit_amount": 100,
+                        "unit_amount": 2700,
                     },
                     "quantity": 1,
                 }
@@ -479,7 +488,10 @@ def _sincronizar_post_pago_desde_return_stripe(pedido_id: int, stripe_session_id
         return
 
     if row["estado"] == ESTADO_COMPLETADO:
-        flash("Tu pedido ya está listo; revisa tu correo (y la carpeta spam) por el PDF.", "info")
+        flash(
+            "Tu pedido ya está listo; revisa tu correo (y la carpeta spam) por el enlace de descarga del PDF.",
+            "info",
+        )
         return
 
     if row["estado"] in (ESTADO_ERROR_ENVIO, ESTADO_ERROR_GENERACION):
@@ -522,7 +534,7 @@ def _sincronizar_post_pago_desde_return_stripe(pedido_id: int, stripe_session_id
         return
     if final["estado"] == ESTADO_COMPLETADO:
         flash(
-            "Pago recibido. Te hemos enviado el PDF a tu correo (revisa spam). "
+            "Pago recibido. Te hemos enviado un enlace de descarga del PDF a tu correo (revisa spam). "
             "Si no llega en unos minutos, escríbenos.",
             "success",
         )
@@ -590,6 +602,22 @@ def gracias():
         "gracias.html",
         pedido_id=pedido_id_final,
         codigo_confirmacion=codigo_confirmacion,
+    )
+
+
+@bp.route("/descarga/<int:pedido_id>")
+def descarga_pdf(pedido_id: int):
+    """
+    Descarga local del PDF generado para revisión interna y entrega manual.
+    """
+    pdf_path = _ruta_pdf_local(pedido_id)
+    if not pdf_path.exists() or not pdf_path.is_file():
+        abort(404, description=f"No existe PDF generado para el pedido #{pedido_id}.")
+    return send_file(
+        str(pdf_path),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=f"mapa_alma_{pedido_id}.pdf",
     )
 
 

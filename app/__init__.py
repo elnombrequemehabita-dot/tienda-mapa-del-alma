@@ -79,6 +79,7 @@ def create_app(test_config: Optional[dict] = None) -> Flask:
         # Cambia SECRET_KEY en producción (cadena larga y aleatoria)
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev-cambiar-en-produccion"),
         DATABASE=os.path.join(app.instance_path, "tienda.sqlite"),
+        DATABASE_URL=(os.environ.get("DATABASE_URL") or "").strip(),
         # Contraseña del panel admin (mejor definirla en variable de entorno)
         ADMIN_PASSWORD=os.environ.get("FLASK_ADMIN_PASSWORD", "admin123"),
         # Reservado; el aviso al admin por nuevo cobro va por webhook (ver email_service)
@@ -106,6 +107,13 @@ def create_app(test_config: Optional[dict] = None) -> Flask:
 
     if test_config is not None:
         app.config.update(test_config)
+
+    running_on_render = bool((os.environ.get("RENDER") or "").strip())
+    if running_on_render and not str(app.config.get("DATABASE_URL") or "").strip():
+        raise RuntimeError(
+            "DATABASE_URL no esta configurado en Render. "
+            "Para evitar perdida de datos, la app no iniciara con SQLite en produccion."
+        )
 
     @app.after_request
     def _security_headers(resp):

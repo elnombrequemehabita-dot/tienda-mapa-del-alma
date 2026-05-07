@@ -10,6 +10,7 @@ from email.message import EmailMessage
 from typing import Any, Optional
 
 from app import db as database
+from app.review_token import token_para_pedido
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,19 @@ def _build_admin_envio_cliente_body(pedido: Any) -> str:
     )
 
 
+def _build_admin_pdf_pendiente_link_body(pedido: Any, pdf_path: str) -> str:
+    return (
+        "El PDF del pedido se generó correctamente, pero no hay proveedor de almacenamiento "
+        "activo para crear un enlace de descarga.\n\n"
+        f"Pedido: #{pedido['id']}\n"
+        f"Codigo de confirmacion: {_codigo_pedido(pedido)}\n"
+        f"Cliente: {pedido['nombre']} {pedido['apellidos'] or ''}\n"
+        f"Email cliente: {pedido['email']}\n"
+        f"Ruta local del PDF: {pdf_path or '(no disponible)'}\n"
+        "Accion requerida: configurar proveedor de almacenamiento/enlace y reenviar notificaciones.\n"
+    )
+
+
 def _build_customer_body(pedido: Any, pdf_url: str, resena_url: str) -> str:
     full_name = f"{pedido['nombre']} {pedido['apellidos'] or ''}".strip()
     lines = [
@@ -90,7 +104,9 @@ def _build_customer_body(pedido: Any, pdf_url: str, resena_url: str) -> str:
         "Puedes descargarlo aqui:",
         pdf_url,
         "",
-        "Cuando lo hayas leido, si quieres, tambien puedes dejar tu comentario y calificacion aqui:",
+        "Tu experiencia puede ayudar a otras personas a descubrir su propio Mapa del Alma ✨",
+        "",
+        "Si este libro toco tu corazon, te hizo reflexionar o te ayudo a conectar contigo misma(o), me haria muy feliz que dejaras tu resena aqui:",
         resena_url,
         "",
         "Resumen de tu pedido:",
@@ -111,7 +127,8 @@ def _build_customer_html_body(pedido: Any, pdf_url: str, resena_url: str) -> str
   <p style="margin:0 0 14px;">Hola {pedido['nombre']},</p>
   <p style="margin:0 0 12px;">Puedes descargarlo aqui:</p>
   <p style="margin:0 0 16px;"><a href="{pdf_url}">{pdf_url}</a></p>
-  <p style="margin:0 0 12px;">Cuando lo hayas leido, si quieres, tambien puedes dejar tu comentario y calificacion aqui:</p>
+  <p style="margin:0 0 12px;">Tu experiencia puede ayudar a otras personas a descubrir su propio Mapa del Alma ✨</p>
+  <p style="margin:0 0 12px;">Si este libro toco tu corazon, te hizo reflexionar o te ayudo a conectar contigo misma(o), me haria muy feliz que dejaras tu resena aqui:</p>
   <p style="margin:0 0 16px;"><a href="{resena_url}">{resena_url}</a></p>
   <div style="background:#faf7fd;border:1px solid #e7ddf2;border-radius:10px;padding:12px 14px;margin:0 0 16px;">
     <p style="margin:0 0 6px;"><strong>Pedido:</strong> #{pedido['id']}</p>
@@ -276,6 +293,27 @@ def notify_admin_envio_cliente_ok(pedido: Any) -> bool:
         return False
 
 
+def notify_admin_pdf_generado_sin_link(pedido: Any, pdf_path: str) -> bool:
+    """
+    Aviso al admin: PDF generado pero sin proveedor de enlace activo.
+    """
+    try:
+        msg = EmailMessage()
+        codigo = _codigo_pedido(pedido)
+        msg["Subject"] = (
+            f"PDF generado sin enlace - Pedido #{pedido['id']} [{codigo}] - Mapa del Alma"
+        )
+        msg["From"] = _email_sender()
+        msg["To"] = _admin_email()
+        msg.set_content(_build_admin_pdf_pendiente_link_body(pedido, pdf_path), charset="utf-8")
+        _send_message(msg)
+        logger.info("Aviso admin (PDF generado sin enlace) enviado, pedido #%s", pedido["id"])
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.error("No se pudo enviar aviso admin (PDF sin enlace): %s", exc, exc_info=False)
+        return False
+
+
 def send_customer_pdf_email(pedido: Any, *, pdf_url: str, resena_url: str) -> None:
     """
     Envía al cliente enlaces de descarga y reseña tras pago confirmado.
@@ -328,3 +366,77 @@ def notify_admin_error(order_id: int, stage: str, error_message: str, pedido: Op
     except Exception as exc:  # noqa: BLE001
         logger.error("No se pudo enviar email al admin (error pedido): %s", exc)
         return False
+
+
+
+# =========================================================
+# COMPATIBILIDAD CON order_services.py
+# =========================================================
+
+def enviar_email_pedido_completado(pedido: Any, pdf_url: str) -> bool:
+    """
+    Wrapper de compatibilidad para el flujo nuevo de order_services.py.
+
+    order_services.py llama:
+        enviar_email_pedido_completado(pedido, pdf_url)
+
+    Internamente reutiliza la función real existente:
+        send_customer_pdf_email(pedido, pdf_url=..., resena_url=...)
+
+    No adjunta PDF pesado. Envía solamente el link de descarga.
+    """
+    pdf_url = str(pdf_url or "").strip()
+
+    if not pdf_url:
+        raise ValueError("No se puede enviar email de pedido completado sin pdf_url.")
+
+    try:
+        order_id = int(pedido["id"])
+    except Exception:
+        order_id = int(pedido.get("id"))
+
+    base_url = (
+        os.environ.get("PUBLIC_BASE_URL")
+        or os.environ.get("BASE_URL")
+        or os.environ.get("RENDER_EXTERNAL_URL")
+        or ""
+    ).strip().rstrip("/")
+
+    if base_url:
+        resena_url = f"{base_url}/resena/{order_id}"
+    else:
+        # Fallback seguro para local/dev. Si tu ruta real de reseña tiene otro nombre,
+        # solo ajustamos este path luego.
+        resena_url = f"/resena/{order_id}"
+
+    send_customer_pdf_email(
+        pedido,
+        pdf_url=pdf_url,
+        resena_url=resena_url,
+    )
+
+    try:
+        notify_admin_envio_cliente_ok(pedido)
+    except Exception:
+        logger.exception("No se pudo notificar al admin que el cliente recibió el email.")
+
+    return True
+
+
+def enviar_email_admin_error(order_id: int, error_message: str, stage: str = "generacion_pdf", pedido: Optional[Any] = None) -> bool:
+    """
+    Wrapper de compatibilidad para order_services.py.
+
+    order_services.py puede llamar:
+        enviar_email_admin_error(order_id, str(error))
+
+    Internamente usa:
+        notify_admin_error(order_id, stage, error_message, pedido)
+    """
+    return notify_admin_error(
+        int(order_id),
+        stage,
+        str(error_message),
+        pedido=pedido,
+    )
+

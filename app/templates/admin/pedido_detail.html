@@ -55,7 +55,7 @@
           <div class="product-card mb-3">
             <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">Enlace de reseña (cliente)</h2>
             <p class="small text-muted mb-2">
-              Copia este enlace si el cliente no encuentra el correo con el PDF. Solo funciona con el pedido completado.
+              Copia este enlace si el cliente no encuentra el correo con el enlace de descarga del PDF. Solo funciona con el pedido completado.
             </p>
             <p class="small mono-small text-break mb-0">{{ resena_url }}</p>
           </div>
@@ -76,6 +76,12 @@
             <dd class="col-sm-8 text-break mono-small">
               {% if pedido["pdf_url"] %}
                 <a href="{{ pedido['pdf_url'] }}" target="_blank" rel="noopener noreferrer">{{ pedido["pdf_url"] }}</a>
+              {% elif pedido["pdf_path"] %}
+                <a href="{{ url_for('main.descarga_pdf', pedido_id=pedido['id']) }}" target="_blank" rel="noopener noreferrer">
+                  {{ url_for('main.descarga_pdf', pedido_id=pedido['id']) }}
+                </a>
+              {% elif pedido["estado"] == "pdf_generado_pendiente_de_link" %}
+                PDF generado, enlace pendiente
               {% else %}
                 —
               {% endif %}
