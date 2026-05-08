@@ -365,10 +365,34 @@ def migrate_pedidos_schema() -> None:
 
 
 def init_app(app) -> None:
-    """Registra el cierre de BD y crea / migra tablas."""
+    """
+    Registra el cierre de BD y prepara inicialización diferida.
+
+    Antes esta función llamaba init_db() durante el arranque de Flask.
+    En Render eso puede bloquear el deploy antes de abrir el puerto, especialmente
+    si PostgreSQL/Supabase tarda en responder.
+
+    Ahora:
+    - registra close_db normalmente;
+    - inicializa/migra la base de datos en la primera petición HTTP real;
+    - deja marcada la app para no repetir migraciones en cada request.
+    """
     app.teardown_appcontext(close_db)
-    with app.app_context():
+
+    app.extensions.setdefault("mapa_del_alma", {})
+    app.extensions["mapa_del_alma"].setdefault("db_initialized", False)
+
+    @app.before_request
+    def _lazy_init_db():
+        state = app.extensions.setdefault("mapa_del_alma", {})
+        if state.get("db_initialized"):
+            return None
+
+        logger.info("Inicializando base de datos en primera petición...")
         init_db()
+        state["db_initialized"] = True
+        logger.info("Base de datos inicializada correctamente.")
+        return None
 
 
 def insert_pedido(

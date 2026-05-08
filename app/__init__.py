@@ -156,9 +156,17 @@ def create_app(test_config: Optional[dict] = None) -> Flask:
         target = request.url.replace("http://", "https://", 1)
         return redirect(target, code=301)
 
-    # Inicializar tablas SQLite
-    with app.app_context():
+    # Registrar cierre de conexión e inicialización diferida de la base de datos.
+    # IMPORTANTE:
+    # En Render no conviene crear/migrar tablas antes de abrir el puerto,
+    # porque si PostgreSQL/Supabase tarda o responde lento, Render puede marcar el deploy como fallido.
+    # database.init_app(app) ahora registra un before_request que inicializa la DB en la primera petición.
+    try:
         database.init_app(app)
+        logger.info("Base de datos registrada para inicialización diferida.")
+    except Exception as e:
+        logger.exception("Error registrando inicialización de base de datos: %s", e)
+        raise
 
     @app.context_processor
     def inject_i18n_context():
