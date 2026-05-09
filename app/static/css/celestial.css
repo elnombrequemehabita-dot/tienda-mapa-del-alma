@@ -1,6 +1,6 @@
 /* =========================================================
-   Mapa del Alma — Cielo azul/dorado premium optimizado
-   Signos zodiacales + estrellas visibles sin bloquear scroll.
+   Mapa del Alma — Cielo premium azul profundo
+   Sin líneas doradas tipo meteoros. Estrellas y signos sutiles.
    Reemplaza completo app/static/css/celestial.css
    ========================================================= */
 
@@ -10,157 +10,158 @@
   pointer-events: none;
   overflow: hidden;
   z-index: 0;
-  opacity: .92;
+  opacity: 0.82;
   contain: strict;
   transform: translateZ(0);
 }
 
+/* Nebulosa azul muy suave, sin líneas diagonales */
 .celestial-sky::before {
   content: "";
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 50% 8%, rgba(251, 191, 36, .10), transparent 20%),
-    radial-gradient(circle at 18% 22%, rgba(14, 165, 233, .16), transparent 30%),
-    radial-gradient(circle at 84% 26%, rgba(56, 189, 248, .12), transparent 30%),
-    radial-gradient(circle at 12% 82%, rgba(251, 191, 36, .08), transparent 28%),
-    linear-gradient(180deg, rgba(2, 8, 23, .18), rgba(2, 6, 23, .72));
+    radial-gradient(circle at 18% 14%, rgba(56, 189, 248, 0.12), transparent 30%),
+    radial-gradient(circle at 82% 18%, rgba(125, 211, 252, 0.09), transparent 34%),
+    radial-gradient(circle at 50% 80%, rgba(14, 165, 233, 0.10), transparent 38%),
+    radial-gradient(circle at 50% 0%, rgba(255, 244, 205, 0.045), transparent 26%),
+    linear-gradient(180deg, rgba(2, 8, 23, 0.10), rgba(2, 6, 23, 0.70));
 }
 
+/* Campo de puntitos finos, sin trazos, sin meteoros */
 .celestial-sky::after {
   content: "";
   position: absolute;
   inset: 0;
   background-image:
-    radial-gradient(circle, rgba(255, 234, 170, .82) 0 1px, transparent 1.7px),
-    radial-gradient(circle, rgba(186, 230, 253, .54) 0 1px, transparent 1.8px),
-    linear-gradient(115deg, transparent 0 48%, rgba(251,191,36,.10) 49%, transparent 50% 100%);
-  background-size: 118px 118px, 210px 210px, 460px 280px;
-  background-position: 0 0, 62px 88px, center;
-  opacity: .54;
-  animation: sky-drift 110s linear infinite;
+    radial-gradient(circle, rgba(232, 248, 255, 0.58) 0 1px, transparent 1.55px),
+    radial-gradient(circle, rgba(255, 231, 166, 0.38) 0 1px, transparent 1.7px);
+  background-size: 135px 135px, 245px 245px;
+  background-position: 0 0, 74px 96px;
+  opacity: 0.42;
+  animation: sky-drift-soft 140s linear infinite;
 }
 
 .celestial-sky .star {
   position: absolute;
   top: -12vh;
   line-height: 1;
-  color: rgba(255, 238, 180, .88);
-  font-size: var(--star-size, .78rem);
-  opacity: var(--star-opacity, .66);
+  color: rgba(226, 246, 255, 0.84);
+  font-size: var(--star-size, 0.72rem);
+  opacity: var(--star-opacity, 0.58);
   text-shadow:
-    0 0 7px rgba(251, 191, 36, .50),
-    0 0 16px rgba(56, 189, 248, .20);
-  animation: star-fall-soft var(--fall-speed, 42s) linear infinite;
+    0 0 7px rgba(125, 211, 252, 0.42),
+    0 0 14px rgba(14, 165, 233, 0.18);
+  animation: star-fall-soft var(--fall-speed, 46s) linear infinite;
   animation-delay: var(--fall-delay, 0s);
   will-change: transform;
   transform: translate3d(0, -12vh, 0);
 }
 
 .celestial-sky .star-bright {
-  --star-size: 1.05rem;
-  --star-opacity: .84;
-  color: #fff8d5;
+  --star-size: 0.98rem;
+  --star-opacity: 0.76;
+  color: #ffffff;
   text-shadow:
-    0 0 8px rgba(255,255,255,.80),
-    0 0 22px rgba(251,191,36,.48);
+    0 0 9px rgba(255,255,255,0.70),
+    0 0 18px rgba(125,211,252,0.35);
 }
 
 .celestial-sky .star-soft {
-  --star-opacity: .50;
-  color: rgba(186, 230, 253, .76);
+  --star-opacity: 0.42;
+  color: rgba(186, 230, 253, 0.70);
 }
 
 .celestial-sky .star-tiny {
-  --star-size: .52rem;
-  --star-opacity: .58;
+  --star-size: 0.48rem;
+  --star-opacity: 0.52;
 }
 
 .celestial-sky .sparkle {
-  color: rgba(255, 244, 204, .86);
+  color: rgba(236, 248, 255, 0.76);
   animation-name: star-fall-soft, star-pulse-soft;
-  animation-duration: var(--fall-speed, 44s), 5s;
+  animation-duration: var(--fall-speed, 48s), 5.8s;
   animation-timing-function: linear, ease-in-out;
   animation-iteration-count: infinite, infinite;
 }
 
 .celestial-sky .zodiac {
-  color: rgba(248, 197, 88, .82);
+  color: rgba(226, 185, 104, 0.56);
   font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", serif;
-  --star-size: 1.25rem;
-  --star-opacity: .58;
+  --star-size: 1.05rem;
+  --star-opacity: 0.42;
   text-shadow:
-    0 0 8px rgba(251,191,36,.44),
-    0 0 18px rgba(14,165,233,.18);
+    0 0 8px rgba(226,185,104,0.22),
+    0 0 16px rgba(56,189,248,0.10);
 }
 
 .celestial-sky .moon {
-  color: rgba(255, 245, 205, .88);
-  --star-size: 1.35rem;
-  --star-opacity: .62;
+  color: rgba(255, 245, 205, 0.72);
+  --star-size: 1.18rem;
+  --star-opacity: 0.50;
   text-shadow:
-    0 0 10px rgba(255,255,255,.58),
-    0 0 24px rgba(251,191,36,.34);
+    0 0 10px rgba(255,255,255,0.42),
+    0 0 22px rgba(125,211,252,0.18);
 }
 
 .celestial-sky .orb {
-  width: .46rem;
-  height: .46rem;
+  width: 0.42rem;
+  height: 0.42rem;
   border-radius: 999px;
-  background: radial-gradient(circle, #fff 0%, rgba(251,191,36,.68) 38%, rgba(56,189,248,.22) 70%, transparent 78%);
-  box-shadow: 0 0 16px rgba(251,191,36,.42);
+  background: radial-gradient(circle, #fff 0%, rgba(125,211,252,0.52) 42%, transparent 75%);
+  box-shadow: 0 0 14px rgba(125,211,252,0.32);
 }
 
-/* 24 elementos, visibles pero livianos */
-.celestial-sky .star:nth-child(1)  { left: 5%;  --drift: -12px; --fall-speed: 34s; --fall-delay: -2s;  }
-.celestial-sky .star:nth-child(2)  { left: 11%; --drift:  10px; --fall-speed: 58s; --fall-delay: -20s; }
-.celestial-sky .star:nth-child(3)  { left: 17%; --drift: -8px;  --fall-speed: 42s; --fall-delay: -11s; }
-.celestial-sky .star:nth-child(4)  { left: 23%; --drift:  14px; --fall-speed: 62s; --fall-delay: -35s; }
-.celestial-sky .star:nth-child(5)  { left: 29%; --drift: -13px; --fall-speed: 39s; --fall-delay: -7s;  }
-.celestial-sky .star:nth-child(6)  { left: 35%; --drift:  9px;  --fall-speed: 66s; --fall-delay: -44s; }
-.celestial-sky .star:nth-child(7)  { left: 41%; --drift: -15px; --fall-speed: 36s; --fall-delay: -18s; }
-.celestial-sky .star:nth-child(8)  { left: 47%; --drift:  11px; --fall-speed: 64s; --fall-delay: -27s; }
-.celestial-sky .star:nth-child(9)  { left: 53%; --drift: -10px; --fall-speed: 45s; --fall-delay: -12s; }
-.celestial-sky .star:nth-child(10) { left: 59%; --drift:  13px; --fall-speed: 68s; --fall-delay: -50s; }
-.celestial-sky .star:nth-child(11) { left: 65%; --drift: -12px; --fall-speed: 40s; --fall-delay: -24s; }
-.celestial-sky .star:nth-child(12) { left: 71%; --drift:  9px;  --fall-speed: 63s; --fall-delay: -38s; }
-.celestial-sky .star:nth-child(13) { left: 77%; --drift: -14px; --fall-speed: 44s; --fall-delay: -6s;  }
-.celestial-sky .star:nth-child(14) { left: 83%; --drift:  12px; --fall-speed: 70s; --fall-delay: -52s; }
-.celestial-sky .star:nth-child(15) { left: 89%; --drift: -11px; --fall-speed: 55s; --fall-delay: -31s; }
-.celestial-sky .star:nth-child(16) { left: 95%; --drift:  8px;  --fall-speed: 67s; --fall-delay: -45s; }
-.celestial-sky .star:nth-child(17) { left: 14%; --drift:  16px; --fall-speed: 48s; --fall-delay: -28s; }
-.celestial-sky .star:nth-child(18) { left: 31%; --drift: -18px; --fall-speed: 72s; --fall-delay: -60s; }
-.celestial-sky .star:nth-child(19) { left: 49%; --drift:  12px; --fall-speed: 37s; --fall-delay: -14s; }
-.celestial-sky .star:nth-child(20) { left: 68%; --drift: -16px; --fall-speed: 74s; --fall-delay: -56s; }
-.celestial-sky .star:nth-child(21) { left: 86%; --drift:  18px; --fall-speed: 46s; --fall-delay: -36s; }
-.celestial-sky .star:nth-child(22) { left: 7%;  --drift: -12px; --fall-speed: 78s; --fall-delay: -65s; }
-.celestial-sky .star:nth-child(23) { left: 74%; --drift:  11px; --fall-speed: 60s; --fall-delay: -40s; }
-.celestial-sky .star:nth-child(24) { left: 92%; --drift: -10px; --fall-speed: 76s; --fall-delay: -58s; }
+/* 24 elementos visibles, movimiento lento y fluido */
+.celestial-sky .star:nth-child(1)  { left: 5%;  --drift: -10px; --fall-speed: 42s; --fall-delay: -4s;  }
+.celestial-sky .star:nth-child(2)  { left: 10%; --drift:  8px;  --fall-speed: 50s; --fall-delay: -14s; }
+.celestial-sky .star:nth-child(3)  { left: 15%; --drift: -12px; --fall-speed: 72s; --fall-delay: -35s; }
+.celestial-sky .star:nth-child(4)  { left: 21%; --drift:  10px; --fall-speed: 56s; --fall-delay: -24s; }
+.celestial-sky .star:nth-child(5)  { left: 27%; --drift: -8px;  --fall-speed: 76s; --fall-delay: -52s; }
+.celestial-sky .star:nth-child(6)  { left: 33%; --drift:  12px; --fall-speed: 44s; --fall-delay: -10s; }
+.celestial-sky .star:nth-child(7)  { left: 39%; --drift: -10px; --fall-speed: 74s; --fall-delay: -44s; }
+.celestial-sky .star:nth-child(8)  { left: 45%; --drift:  8px;  --fall-speed: 52s; --fall-delay: -18s; }
+.celestial-sky .star:nth-child(9)  { left: 51%; --drift: -12px; --fall-speed: 80s; --fall-delay: -62s; }
+.celestial-sky .star:nth-child(10) { left: 57%; --drift:  9px;  --fall-speed: 48s; --fall-delay: -30s; }
+.celestial-sky .star:nth-child(11) { left: 63%; --drift: -8px;  --fall-speed: 78s; --fall-delay: -56s; }
+.celestial-sky .star:nth-child(12) { left: 69%; --drift:  12px; --fall-speed: 60s; --fall-delay: -22s; }
+.celestial-sky .star:nth-child(13) { left: 75%; --drift: -10px; --fall-speed: 82s; --fall-delay: -66s; }
+.celestial-sky .star:nth-child(14) { left: 81%; --drift:  8px;  --fall-speed: 50s; --fall-delay: -8s;  }
+.celestial-sky .star:nth-child(15) { left: 87%; --drift: -12px; --fall-speed: 84s; --fall-delay: -70s; }
+.celestial-sky .star:nth-child(16) { left: 93%; --drift:  10px; --fall-speed: 58s; --fall-delay: -28s; }
+.celestial-sky .star:nth-child(17) { left: 12%; --drift: -14px; --fall-speed: 86s; --fall-delay: -74s; }
+.celestial-sky .star:nth-child(18) { left: 30%; --drift:  14px; --fall-speed: 46s; --fall-delay: -12s; }
+.celestial-sky .star:nth-child(19) { left: 48%; --drift: -10px; --fall-speed: 88s; --fall-delay: -78s; }
+.celestial-sky .star:nth-child(20) { left: 66%; --drift:  12px; --fall-speed: 54s; --fall-delay: -20s; }
+.celestial-sky .star:nth-child(21) { left: 84%; --drift: -14px; --fall-speed: 90s; --fall-delay: -80s; }
+.celestial-sky .star:nth-child(22) { left: 6%;  --drift:  10px; --fall-speed: 66s; --fall-delay: -40s; }
+.celestial-sky .star:nth-child(23) { left: 72%; --drift: -8px;  --fall-speed: 62s; --fall-delay: -36s; }
+.celestial-sky .star:nth-child(24) { left: 96%; --drift:  8px;  --fall-speed: 92s; --fall-delay: -82s; }
 
 @keyframes star-fall-soft {
   0% { transform: translate3d(0, -14vh, 0); opacity: 0; }
-  10% { opacity: var(--star-opacity, .66); }
-  88% { opacity: calc(var(--star-opacity, .66) * .76); }
+  12% { opacity: var(--star-opacity, 0.58); }
+  88% { opacity: calc(var(--star-opacity, 0.58) * 0.72); }
   100% { transform: translate3d(var(--drift, 8px), 112vh, 0); opacity: 0; }
 }
 
 @keyframes star-pulse-soft {
-  0%, 100% { filter: brightness(.92); }
-  50% { filter: brightness(1.35); }
+  0%, 100% { filter: brightness(0.94); }
+  50% { filter: brightness(1.28); }
 }
 
-@keyframes sky-drift {
+@keyframes sky-drift-soft {
   from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(-90px, 120px, 0); }
+  to { transform: translate3d(-80px, 110px, 0); }
 }
 
 .cosmic-decor { display: none !important; }
 
 @media (max-width: 767px) {
-  .celestial-sky { opacity: .74; }
-  .celestial-sky::after { opacity: .42; animation-duration: 150s; }
+  .celestial-sky { opacity: 0.62; }
+  .celestial-sky::after { opacity: 0.30; animation-duration: 170s; }
   .celestial-sky .star:nth-child(n+17) { display: none; }
-  .celestial-sky .zodiac { --star-size: 1rem; }
+  .celestial-sky .zodiac { --star-size: 0.92rem; --star-opacity: 0.36; }
 }
 
 @media (prefers-reduced-motion: reduce) {

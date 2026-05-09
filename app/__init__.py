@@ -14,40 +14,126 @@ def _bool_env(name: str, default: bool = False) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on", "si", "sí"}
 
 
-_TRANSLATIONS = {
+TRANSLATIONS_ES = {
     "site.name": "El Nombre Que Me Habita",
     "footer.product": "Mapa del Alma – El Nombre Que Me Habita",
     "footer.rights": "Todos los derechos reservados.",
     "footer.privacy": "Privacidad",
     "footer.terms": "Condiciones",
     "footer.contact": "Contacto",
+
     "nav.home": "Inicio",
     "nav.reviews": "Reseñas",
     "nav.cta": "Comprar ahora",
     "nav.order": "Crear mi Mapa",
     "nav.contact": "Contacto",
-    "product.name": "Mapa del Alma",
+
     "ticker.top": "Mapa del Alma personalizado · Entrega digital por email · Pago seguro con Stripe · Tu historia, escrita solo para ti",
-    "ticker.bottom": "Producto digital personalizado · Link de descarga por 3 días · Revisa bien tus datos antes de comprar",
+    "ticker.bottom": "Producto digital personalizado · Link de descarga activo por 3 días · Revisa bien tus datos antes de comprar",
+
     "index.title": "Mapa del Alma personalizado · El Nombre Que Me Habita",
+    "index.hero.price.name": "Mapa del Alma personalizado",
+    "index.reviews.title": "Lo que dicen quienes ya lo tienen",
+    "index.reviews.lead": "Reseñas verificadas de clientes que ya recibieron su Mapa del Alma.",
+    "index.reviews.empty": "Aún no hay reseñas publicadas. En cuanto revisemos las primeras, aparecerán aquí.",
+    "index.reviews.verified_order": "Pedido verificado",
+
+    "pedido.title": "Pedido · Mapa del Alma",
+    "pedido.header": "Crear mi Mapa del Alma",
+    "pedido.intro": "Completa tus datos con cuidado. Tu Mapa del Alma se crea de forma personalizada y se enviará al correo que escribas aquí.",
+    "pedido.name": "Tu nombre",
+    "pedido.name_placeholder": "Ejemplo: Yanelis",
+    "pedido.lastname": "Tus apellidos",
+    "pedido.lastname_placeholder": "Ejemplo: León García",
+    "pedido.email": "Correo electrónico",
+    "pedido.email_placeholder": "tu@correo.com",
+    "pedido.email_confirm": "Confirma tu correo electrónico",
+    "pedido.email_confirm_placeholder": "Repite tu correo",
+    "pedido.birthdate": "Fecha de nacimiento",
+    "pedido.optional": "opcional",
+    "pedido.birthdate_placeholder": "mm/dd/aaaa",
+    "pedido.form_of_address": "¿Cómo deseas que te hablemos en la lectura?",
+    "pedido.form_of_address_optional": "opcional",
+    "pedido.form_of_address_placeholder": "Selecciona una opción",
+    "pedido.confirm_data": "Confirmo que revisé mi nombre, apellidos, fecha de nacimiento y correo. Entiendo que estos datos se usarán para crear mi contenido personalizado.",
+    "pedido.confirm_digital": "Acepto que es un producto digital personalizado. Una vez iniciado el proceso de creación, no se realizan cambios, cancelaciones ni reembolsos.",
+    "pedido.submit": "Continuar al pago seguro",
+    "pedido.back": "Volver al inicio",
+    "pedido.terms": "Términos y condiciones",
+    "pedido.privacy": "Política de privacidad",
+    "pedido.digital_notice": "Producto digital personalizado · Entrega por email · Link activo por 3 días",
+    "pedido.secure_payment": "Pago seguro con Stripe",
+    "pedido.required_note": "Los campos obligatorios deben completarse correctamente antes de continuar.",
+    "pedido.no_refund_notice": "Por ser una creación personalizada, revisa bien tus datos antes de pagar.",
+
+    "pedido.full_name": "Nombre completo",
+    "pedido.apellidos": "Apellidos",
+    "pedido.fecha_nacimiento": "Fecha de nacimiento",
+    "pedido.forma_trato": "Tratamiento",
+    "pedido.acepta": "Confirmo que mis datos están correctos.",
+    "pedido.acepta_digital": "Acepto las condiciones del producto digital personalizado.",
+    "pedido.cta": "Continuar al pago seguro",
+    "pedido.cancel": "Volver al inicio",
+
+    "legal.privacy.title": "Política de privacidad",
+    "legal.terms.title": "Condiciones del servicio",
+    "legal.contact.title": "Contacto",
 }
 
 
+def _load_project_translations() -> dict:
+    merged = dict(TRANSLATIONS_ES)
+    try:
+        from app import i18n  # type: ignore
+
+        for attr in ("TRANSLATIONS", "translations", "I18N", "MESSAGES"):
+            data = getattr(i18n, attr, None)
+            if isinstance(data, dict):
+                es_data = data.get("es") if hasattr(data, "get") else None
+                if isinstance(es_data, dict):
+                    for key, value in es_data.items():
+                        if isinstance(value, str):
+                            merged[str(key)] = value
+
+                for key, value in data.items():
+                    if isinstance(value, dict) and "es" in value:
+                        merged[str(key)] = str(value["es"])
+                    elif isinstance(value, str):
+                        merged[str(key)] = value
+    except Exception:
+        logger.info("No se pudieron cargar traducciones desde app.i18n; usando fallback local.")
+
+    # Estas claves críticas ganan siempre para evitar nav.cta, ticker.top, pedido.header, etc.
+    merged.update(TRANSLATIONS_ES)
+    return merged
+
+
 def _install_template_helpers(app: Flask) -> None:
+    translations = _load_project_translations()
+
     def t(key: str, default: str | None = None) -> str:
         if key is None:
             return ""
         key_str = str(key)
-        return _TRANSLATIONS.get(key_str, default if default is not None else key_str)
+        value = translations.get(key_str)
+        if value is not None:
+            return value
+        return default if default is not None else key_str
 
     app.jinja_env.globals["t"] = t
 
     @app.context_processor
     def inject_template_helpers():
+        support_email = (
+            os.getenv("EMAIL_SENDER")
+            or os.getenv("ADMIN_EMAIL")
+            or "elnombrequemehabita@gmail.com"
+        )
         return {
             "t": t,
-            "site_name": "El Nombre Que Me Habita",
+            "site_name": t("site.name"),
             "product_name": "Mapa del Alma",
+            "support_email": support_email,
             "public_base_url": app.config.get("PUBLIC_BASE_URL", ""),
         }
 

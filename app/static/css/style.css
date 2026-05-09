@@ -1162,3 +1162,307 @@ body {
     animation: none !important;
   }
 }
+
+
+/* =========================================================
+   PATCH FINAL — Elegancia azul, transparencia y coherencia real
+   ========================================================= */
+
+:root {
+  --alma-blue-950: #020817;
+  --alma-blue-900: #041124;
+  --alma-blue-850: #061a33;
+  --alma-blue-800: #08213f;
+  --alma-cyan-soft: #bdeeff;
+  --alma-gold: #d9ad5f;
+  --alma-gold-soft: #f3dc9a;
+  --alma-glass: rgba(3, 13, 31, 0.58);
+  --alma-glass-strong: rgba(3, 13, 31, 0.74);
+  --alma-line: rgba(189, 238, 255, 0.14);
+  --alma-gold-line: rgba(217, 173, 95, 0.20);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background:
+    radial-gradient(circle at 50% -8%, rgba(56, 189, 248, 0.12), transparent 30%),
+    radial-gradient(circle at 15% 18%, rgba(217, 173, 95, 0.045), transparent 28%),
+    linear-gradient(180deg, #08213f 0%, #041124 34%, #020817 100%) !important;
+  color: #edf7ff !important;
+}
+
+/* Header translúcido: el nombre flota sin bloque pesado */
+.site-nav {
+  background: rgba(2, 8, 23, 0.52) !important;
+  backdrop-filter: blur(10px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(1.1) !important;
+  border-top: 1px solid rgba(255,255,255,0.04) !important;
+  border-bottom: 1px solid rgba(189,238,255,0.14) !important;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.16) !important;
+}
+
+.site-nav .inner {
+  max-width: 92rem !important;
+  padding: 0.85rem 1.1rem !important;
+}
+
+.brand-logo {
+  height: clamp(3.6rem, 7vw, 5.6rem) !important;
+  filter: drop-shadow(0 0 12px rgba(217,173,95,.20)) !important;
+}
+
+.brand-text {
+  color: rgba(240, 250, 255, 0.92) !important;
+  text-shadow:
+    0 0 14px rgba(189, 238, 255, 0.18),
+    0 12px 28px rgba(0,0,0,.42) !important;
+  font-size: clamp(1.55rem, 3.3vw, 2.85rem) !important;
+}
+
+/* Navegación limpia */
+.nav-links a {
+  color: rgba(232, 247, 255, .88) !important;
+  font-weight: 800 !important;
+}
+
+.nav-links a:hover {
+  color: var(--alma-gold-soft) !important;
+  background: rgba(217,173,95,.08) !important;
+}
+
+/* CTA principal: premium real, dorado suave no casino */
+.nav-links .btn-nav,
+.btn-primary-lg,
+.mobile-sticky-cta,
+.mobile-floating-cta a {
+  background: linear-gradient(135deg, #f5df9d 0%, #d9ad5f 42%, #9a6426 100%) !important;
+  color: #140d05 !important;
+  border: 1px solid rgba(243, 220, 154, .58) !important;
+  box-shadow:
+    0 10px 26px rgba(217,173,95,.20),
+    0 0 18px rgba(217,173,95,.20),
+    inset 0 1px 0 rgba(255,255,255,.42) !important;
+  text-shadow: 0 1px 0 rgba(255,255,255,.25) !important;
+  font-weight: 900 !important;
+}
+
+.nav-links .btn-nav:hover,
+.btn-primary-lg:hover,
+.mobile-sticky-cta:hover {
+  filter: brightness(1.05) saturate(1.03) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Barra movedora translúcida y fina */
+.news-ticker {
+  background: rgba(3, 13, 31, 0.38) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  border-top: 1px solid rgba(189,238,255,0.10) !important;
+  border-bottom: 1px solid rgba(189,238,255,0.12) !important;
+}
+
+.news-ticker-track {
+  animation-duration: 48s !important;
+}
+
+.news-ticker-track span {
+  color: rgba(237, 247, 255, 0.86) !important;
+  text-shadow: 0 0 10px rgba(189,238,255,.10) !important;
+  font-size: .78rem !important;
+  letter-spacing: .055em !important;
+}
+
+/* Subnav translúcida, no bloque pesado */
+.premium-subnav {
+  background: rgba(2, 8, 23, 0.42) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  border-bottom: 1px solid rgba(189,238,255,.10) !important;
+  box-shadow: none !important;
+}
+
+.premium-subnav a {
+  color: rgba(232, 247, 255, .88) !important;
+}
+
+.premium-subnav a:hover {
+  color: var(--alma-gold-soft) !important;
+  background: rgba(217,173,95,.08) !important;
+}
+
+.premium-subnav .premium-subnav-cta {
+  background: rgba(217, 173, 95, 0.10) !important;
+  color: var(--alma-gold-soft) !important;
+  border: 1px solid rgba(217,173,95,.28) !important;
+  box-shadow: 0 0 18px rgba(217,173,95,.10) !important;
+}
+
+/* Botón secundario */
+.btn-outline {
+  background: rgba(3, 13, 31, 0.46) !important;
+  color: #dff6ff !important;
+  border: 1px solid rgba(189,238,255,.18) !important;
+  box-shadow: none !important;
+}
+
+.btn-outline:hover {
+  color: #ffffff !important;
+  background: rgba(189,238,255,.08) !important;
+}
+
+/* Se elimina el separador dorado ondulado que parecía estrella fugaz */
+.section-how::before,
+.section-pdf::before,
+.section-mockups::before,
+.section-includes::before,
+.section-emotional-quotes::before,
+.section-reviews::before,
+.section-final-cta::before,
+.section-reveal-premium::before,
+.section-delivery-premium::before,
+.section-ritual::before,
+.site-footer::before {
+  background-image: none !important;
+  height: 1px !important;
+  width: min(24rem, 70vw) !important;
+  margin: 0 auto 1rem !important;
+  background: linear-gradient(90deg, transparent, rgba(189,238,255,.18), rgba(217,173,95,.16), transparent) !important;
+}
+
+/* Hero limpio, no falso */
+.hero-cinematic::before {
+  background:
+    radial-gradient(circle at 50% 12%, rgba(189,238,255,.10), transparent 30%),
+    radial-gradient(circle at 82% 30%, rgba(217,173,95,.05), transparent 34%) !important;
+}
+
+.hero h1,
+.section-heading-home {
+  color: rgba(248, 252, 255, .94) !important;
+  text-shadow:
+    0 0 18px rgba(189,238,255,.13),
+    0 14px 34px rgba(0,0,0,.52) !important;
+}
+
+.hero-subline,
+.section-lead-home {
+  color: rgba(226, 239, 247, .88) !important;
+}
+
+/* Tarjetas cristal azul */
+.delivery-detail-card,
+.reveal-card,
+.emotional-quote-card,
+.not-for-card,
+.section-includes-card,
+.review-card-public,
+.product-card,
+.thanks-card,
+.resena-card,
+.contact-card,
+.form-shell {
+  background: linear-gradient(145deg, rgba(3, 18, 41, .70), rgba(2, 8, 23, .78)) !important;
+  border: 1px solid rgba(189,238,255,.12) !important;
+  box-shadow: 0 14px 36px rgba(0, 8, 30, .28) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+/* Formulario más claro */
+.form-label {
+  color: rgba(243, 220, 154, .94) !important;
+}
+
+.form-check-legal {
+  background: rgba(3, 13, 31, .42) !important;
+  border: 1px solid rgba(189,238,255,.12) !important;
+}
+
+.form-check-label {
+  color: rgba(232,247,255,.88) !important;
+}
+
+.form-control,
+.form-select,
+.form-select-mystic {
+  background-color: rgba(245, 250, 255, .96) !important;
+  color: #071225 !important;
+}
+
+/* Precio */
+.hero-price-card {
+  background: linear-gradient(145deg, rgba(3, 18, 41, .72), rgba(2, 8, 23, .78)) !important;
+  border: 1px solid rgba(189,238,255,.14) !important;
+  backdrop-filter: blur(5px) !important;
+}
+
+.hero-price-value {
+  color: #ffffff !important;
+  text-shadow: 0 0 16px rgba(189,238,255,.12) !important;
+}
+
+.hero-price-currency {
+  color: var(--alma-gold-soft) !important;
+}
+
+/* Reseñas */
+.reviews-shop-summary {
+  background: rgba(3, 13, 31, .55) !important;
+  border: 1px solid rgba(189,238,255,.12) !important;
+}
+
+.reviews-shop-summary__stars,
+.review-card-public__stars {
+  color: var(--alma-gold-soft) !important;
+}
+
+/* Mobile */
+@media (max-width: 767px) {
+  .site-nav .inner {
+    padding: .65rem .8rem !important;
+  }
+
+  .brand-with-logo {
+    max-width: 72% !important;
+  }
+
+  .brand-logo {
+    height: 3.6rem !important;
+  }
+
+  .brand-text {
+    font-size: 1.45rem !important;
+  }
+
+  .nav-links a:not(.btn-nav) {
+    display: none !important;
+  }
+
+  .nav-links .btn-nav {
+    min-height: 38px !important;
+    padding: .55rem .78rem !important;
+    font-size: .72rem !important;
+  }
+
+  .premium-subnav {
+    position: relative !important;
+    top: auto !important;
+    overflow-x: auto !important;
+    justify-content: flex-start !important;
+    padding: .62rem .7rem !important;
+    gap: .5rem !important;
+  }
+
+  .premium-subnav a {
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+    font-size: .74rem !important;
+  }
+
+  .hero-mapa-wrap-premium {
+    width: min(92vw, 20rem) !important;
+  }
+}
