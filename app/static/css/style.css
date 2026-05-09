@@ -1466,3 +1466,352 @@ body {
     width: min(92vw, 20rem) !important;
   }
 }
+
+/* =========================================================
+   REFINAMIENTO PREMIUM 2026 — Navegación por páginas
+   Objetivo: eliminar botones repetidos, reducir fatiga móvil
+   y convertir la tienda en una experiencia editorial premium.
+   ========================================================= */
+
+/* La subnav anterior se elimina desde base.html; este seguro evita restos si quedaran en caché. */
+.premium-subnav { display: none !important; }
+
+.site-nav {
+  position: sticky;
+  top: 0;
+  z-index: 150;
+  background: rgba(3, 13, 31, 0.82);
+  border-bottom: 1px solid rgba(189, 238, 255, 0.10);
+  box-shadow: 0 16px 46px rgba(0, 8, 30, 0.34);
+}
+
+.site-nav .inner {
+  max-width: 82rem;
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+}
+
+.nav-links-premium {
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.nav-links-premium a {
+  color: rgba(232, 247, 255, 0.80);
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 0.45rem 0.68rem;
+  white-space: nowrap;
+}
+
+.nav-links-premium a:hover,
+.nav-links-premium a.is-active {
+  color: rgba(255, 250, 232, 0.98);
+  background: rgba(125, 211, 252, 0.08);
+  border-color: rgba(189, 238, 255, 0.14);
+}
+
+.nav-links-premium .btn-nav {
+  color: #07101f !important;
+  background: linear-gradient(135deg, rgba(243, 220, 154, 0.96), rgba(125, 211, 252, 0.86));
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28), 0 0 18px rgba(125, 211, 252, 0.15);
+}
+
+.hero-home-clean {
+  padding-top: clamp(1.8rem, 4vw, 3.6rem);
+}
+
+.hero-home-visual {
+  margin-bottom: 0.5rem;
+}
+
+.hero-home-clean .hero-mapa-wrap-premium {
+  width: min(62vw, 18rem);
+  margin-top: 0;
+  margin-bottom: 0.4rem;
+}
+
+.hero-home-clean .hero-subline-premium {
+  max-width: 48rem;
+}
+
+.hero-value-strip-clean {
+  grid-template-columns: minmax(15rem, 22rem) minmax(0, 1fr);
+  background: linear-gradient(145deg, rgba(3, 18, 41, 0.48), rgba(2, 8, 23, 0.62));
+  border: 1px solid rgba(189, 238, 255, 0.11);
+  border-radius: 1.45rem;
+  padding: 0.9rem;
+  box-shadow: 0 20px 55px rgba(0, 8, 30, 0.28);
+}
+
+.hero-value-strip-clean .hero-price-card {
+  margin-bottom: 0;
+  width: 100%;
+}
+
+.section-home-menu {
+  padding-top: clamp(1.8rem, 4.5vw, 3rem);
+}
+
+.premium-page-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.35rem;
+}
+
+.premium-page-card {
+  display: block;
+  min-height: 100%;
+  text-decoration: none;
+  padding: 1.15rem;
+  border-radius: 1.25rem;
+  background: linear-gradient(145deg, rgba(3, 18, 41, 0.68), rgba(2, 8, 23, 0.82));
+  border: 1px solid rgba(189, 238, 255, 0.12);
+  box-shadow: 0 14px 38px rgba(0, 8, 30, 0.25);
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.premium-page-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(189, 238, 255, 0.24);
+  background: linear-gradient(145deg, rgba(7, 32, 66, 0.72), rgba(2, 8, 23, 0.86));
+  text-decoration: none;
+}
+
+.premium-page-card span {
+  display: inline-grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 999px;
+  margin-bottom: 0.7rem;
+  color: rgba(243, 220, 154, 0.98);
+  background: rgba(217, 173, 95, 0.10);
+}
+
+.premium-page-card h3 {
+  margin: 0 0 0.45rem;
+  font-family: var(--font-display);
+  font-size: 1.28rem;
+  color: rgba(255, 250, 232, 0.98);
+}
+
+.premium-page-card p {
+  margin: 0;
+  color: rgba(232, 247, 255, 0.82);
+  font-size: 0.94rem;
+  line-height: 1.52;
+}
+
+.home-preview-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(18rem, 0.75fr);
+  gap: clamp(1rem, 3vw, 1.5rem);
+  align-items: center;
+  margin-top: 1.25rem;
+}
+
+.home-preview-main {
+  margin: 0;
+  overflow: hidden;
+  border-radius: 1.35rem;
+  border: 1px solid rgba(189, 238, 255, 0.14);
+  box-shadow: 0 22px 60px rgba(0, 8, 30, 0.36);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.home-preview-main img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.home-preview-copy {
+  padding: clamp(1rem, 3vw, 1.35rem);
+  border-radius: 1.25rem;
+  background: linear-gradient(145deg, rgba(3, 18, 41, 0.58), rgba(2, 8, 23, 0.76));
+  border: 1px solid rgba(189, 238, 255, 0.10);
+}
+
+.home-preview-copy h3 {
+  margin: 0 0 0.65rem;
+  font-family: var(--font-display);
+  color: rgba(255, 250, 232, 0.98);
+  font-size: clamp(1.35rem, 3vw, 1.7rem);
+  line-height: 1.16;
+}
+
+.home-preview-copy p {
+  color: rgba(232, 247, 255, 0.84);
+  line-height: 1.62;
+}
+
+.page-hero {
+  padding-top: clamp(2rem, 6vw, 4.2rem);
+  padding-bottom: clamp(1.6rem, 4vw, 2.6rem);
+}
+
+.page-heading-xl {
+  font-size: clamp(2rem, 5.8vw, 3.35rem);
+  max-width: 58rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.page-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 1.35rem;
+}
+
+.page-section-card {
+  border-radius: 1.5rem;
+  background: linear-gradient(180deg, rgba(3, 13, 31, 0.24), rgba(2, 8, 23, 0.16));
+  border: 1px solid rgba(189, 238, 255, 0.07);
+}
+
+.deep-reading-card-editorial {
+  max-width: 58rem;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.deep-reading-card-editorial p {
+  color: rgba(232, 247, 255, 0.88);
+  font-size: clamp(1rem, 2.4vw, 1.08rem);
+  line-height: 1.75;
+}
+
+.editorial-gallery-grid-large {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.editorial-gallery-grid-large .editorial-gallery-main {
+  grid-column: 1 / -1;
+}
+
+.editorial-gallery-grid-large figure img {
+  width: 100%;
+}
+
+.includes-list-premium {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.reviews-page-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.reviews-slide-grid-home {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
+/* Evita que el botón fijo tape el contenido inferior en móvil. */
+body:has(.mobile-sticky-cta) {
+  padding-bottom: 0;
+}
+
+@media (max-width: 1024px) {
+  .site-nav .inner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .brand-with-logo {
+    max-width: 100%;
+  }
+
+  .nav-links-premium {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    padding-bottom: 0.25rem;
+    scrollbar-width: thin;
+  }
+
+  .nav-links-premium a {
+    flex: 0 0 auto;
+  }
+
+  .premium-page-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hero-value-strip-clean,
+  .home-preview-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767px) {
+  main {
+    padding-left: 0.78rem;
+    padding-right: 0.78rem;
+  }
+
+  .site-nav .inner {
+    gap: 0.55rem;
+  }
+
+  .brand-logo {
+    height: 3.25rem;
+    max-width: 4rem;
+  }
+
+  .brand-text {
+    font-size: 1.35rem;
+  }
+
+  .nav-links-premium a {
+    font-size: 0.82rem;
+    padding: 0.4rem 0.58rem;
+  }
+
+  .premium-page-grid,
+  .includes-list-premium,
+  .editorial-gallery-grid-large {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-home-clean .hero-mapa-wrap-premium {
+    width: min(82vw, 16rem);
+  }
+
+  .hero-value-strip-clean {
+    padding: 0.75rem;
+  }
+
+  .section-home {
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
+  }
+
+  .section-heading-home {
+    font-size: clamp(1.55rem, 8vw, 2.25rem);
+  }
+
+  .page-heading-xl {
+    font-size: clamp(1.9rem, 9vw, 2.65rem);
+  }
+
+  .mobile-sticky-cta {
+    z-index: 180;
+  }
+
+  body {
+    padding-bottom: 4.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .premium-page-card,
+  .btn-primary-lg,
+  .btn-outline {
+    transition: none !important;
+  }
+}

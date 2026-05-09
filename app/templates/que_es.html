@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Qué es el Mapa del Alma · {{ t('site.name') }}{% endblock %}
+{% block content %}
+  <section class="section-home page-hero" aria-labelledby="titulo-que-es">
+    <div class="section-home-inner">
+      <p class="delivery-premium-kicker">Qué es el Mapa del Alma</p>
+      <h1 id="titulo-que-es" class="section-heading-home page-heading-xl">Una lectura para sentir, no para correr.</h1>
+      <p class="section-lead-home">
+        El Mapa del Alma está pensado para leerse con calma, como una experiencia íntima. No es una hoja genérica ni una respuesta rápida: es una lectura personalizada que reúne capas de tu nombre, tus apellidos, tu energía, tus símbolos, tus patrones, tus dones, tus desafíos y tu forma particular de habitar el mundo.
+      </p>
+      <div class="page-actions">
+        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Quiero mi mapa</a>
+        <a class="btn-outline" href="/vista-previa">Ver vista previa</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-home section-deep-reading page-section-card" aria-labelledby="titulo-diferente">
+    <div class="section-home-inner">
+      <h2 id="titulo-diferente" class="section-heading-home">No es un archivo más.</h2>
+      <div class="deep-reading-card deep-reading-card-editorial">
+        <p>
+          Quien lo compra recibe una pieza simbólica creada para volver a ella, subrayar frases, detenerse en ciertas páginas, reconocerse poco a poco y entender partes de sí que quizás nunca había visto escritas de esa manera.
+        </p>
+        <p>
+          Algunas páginas se leen rápido. Otras se sienten. Otras necesitan reposar. Por eso este mapa no está hecho para consumirlo de prisa, sino para acompañarte como una guía personal que puedes releer cada vez que necesites recordar quién eres, qué cargas vienes soltando y qué fuerza vive dentro de ti.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-home" aria-labelledby="titulo-tres-pilares">
+    <div class="section-home-inner">
+      <h2 id="titulo-tres-pilares" class="section-heading-home">Tres pilares de la experiencia</h2>
+      <div class="deep-reading-grid">
+        <article>
+          <span aria-hidden="true">✦</span>
+          <h3>Es profundo</h3>
+          <p>No se queda en una frase bonita. Explora tu historia simbólica, tus emociones, tus sombras y tu propósito.</p>
+        </article>
+        <article>
+          <span aria-hidden="true">☾</span>
+          <h3>Es personal</h3>
+          <p>Se crea con tus datos y tu identidad, no como una plantilla igual para todo el mundo.</p>
+        </article>
+        <article>
+          <span aria-hidden="true">✧</span>
+          <h3>Es para volver a leer</h3>
+          <p>No tienes que entenderlo todo de una vez. Está pensado para acompañarte y revelarse poco a poco.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-home section-soul-promise" aria-labelledby="titulo-para-quien">
+    <div class="section-home-inner">
+      <h2 id="titulo-para-quien" class="section-heading-home">Esto no es para todo el mundo</h2>
+      <p class="section-lead-home section-lead-tight">Este mapa está hecho para personas que valoran lo emocional, lo simbólico y lo profundamente personal.</p>
+      <div class="not-for-grid">
+        <div class="not-for-card">
+          <h3 class="not-for-title">No es para ti si...</h3>
+          <ul class="not-for-list">
+            <li>Buscas una lectura rápida, fría o superficial.</li>
+            <li>Solo quieres comprar un archivo sin conexión emocional.</li>
+            <li>No te interesa mirar hacia tu historia interior.</li>
+          </ul>
+        </div>
+        <div class="not-for-card">
+          <h3 class="not-for-title">Sí es para ti si...</h3>
+          <ul class="not-for-list">
+            <li>Sientes que tu nombre tiene un mensaje para ti.</li>
+            <li>Quieres comprenderte desde una mirada más íntima.</li>
+            <li>Deseas regalar algo emocional, único y memorable.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <a class="mobile-sticky-cta" href="{{ url_for('main.pedido') }}">Descubrir mi mapa · $27</a>
+{% endblock %}

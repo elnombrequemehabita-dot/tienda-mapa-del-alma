@@ -1,6 +1,6 @@
 import os
 import logging
-from flask import Flask
+from flask import Flask, render_template
 
 from app import db as database
 
@@ -207,6 +207,30 @@ def create_app():
     except Exception as e:
         logger.exception("Error registrando blueprint principal app.routes.bp: %s", e)
         raise
+
+
+
+    # Páginas editoriales premium separadas.
+    # Esto evita una home demasiado larga y mantiene la navegación siempre a mano.
+    @app.route("/que-es")
+    def que_es():
+        return render_template("que_es.html")
+
+    @app.route("/vista-previa")
+    def vista_previa():
+        return render_template("vista_previa.html")
+
+    @app.route("/incluye")
+    def incluye():
+        return render_template("incluye.html")
+
+    @app.route("/preguntas")
+    def preguntas():
+        return render_template("preguntas.html")
+
+    @app.route("/resenas")
+    def resenas_publicas():
+        return render_template("resenas.html")
 
     @app.route("/health")
     def health():

@@ -69,22 +69,17 @@
           <span class="brand-text">{{ t('site.name') }}</span>
         </a>
 
-        <nav class="nav-links" aria-label="Principal">
-          <a href="{{ url_for('main.index') }}">{{ t('nav.home') }}</a>
-          <a href="{{ url_for('main.index') }}#resenas">{{ t('nav.reviews') }}</a>
-          <a class="btn-nav" href="{{ url_for('main.pedido') }}">{{ t('nav.cta') }}</a>
+        <nav class="nav-links nav-links-premium" aria-label="Principal">
+          <a class="{% if request.path == '/' %}is-active{% endif %}" href="{{ url_for('main.index') }}">Inicio</a>
+          <a class="{% if request.path == '/que-es' %}is-active{% endif %}" href="/que-es">Qué es</a>
+          <a class="{% if request.path == '/vista-previa' %}is-active{% endif %}" href="/vista-previa">Vista previa</a>
+          <a class="{% if request.path == '/incluye' %}is-active{% endif %}" href="/incluye">Incluye</a>
+          <a class="{% if request.path == '/resenas' %}is-active{% endif %}" href="/resenas">Reseñas</a>
+          <a class="{% if request.path == '/preguntas' %}is-active{% endif %}" href="/preguntas">FAQ</a>
+          <a class="btn-nav" href="{{ url_for('main.pedido') }}">Comprar</a>
         </nav>
       </div>
     </header>
-
-    <nav class="premium-subnav" aria-label="Accesos rápidos">
-      <a href="{{ url_for('main.index') }}">⌂ Inicio</a>
-      <a href="{{ url_for('main.index') }}#promesa">✦ ¿Qué es?</a>
-      <a href="{{ url_for('main.index') }}#titulo-incluye">🎁 Incluye</a>
-      <a href="{{ url_for('main.index') }}#resenas">💬 Reseñas</a>
-      <a href="{{ url_for('main.index') }}#faq">❔ Preguntas</a>
-      <a class="premium-subnav-cta" href="{{ url_for('main.pedido') }}">✨ Quiero mi Mapa del Alma</a>
-    </nav>
 
 
     <div class="news-ticker" aria-label="{{ t('ticker.top') }}">
