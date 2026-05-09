@@ -1,48 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Qué incluye · Mapa del Alma{% endblock %}
 {% block content %}
-  <section class="section-home page-hero" aria-labelledby="titulo-incluye-page">
-    <div class="section-home-inner">
-      <p class="delivery-premium-kicker">Qué incluye</p>
-      <h1 id="titulo-incluye-page" class="section-heading-home page-heading-xl">Más de 20 páginas creadas para una sola persona.</h1>
-      <p class="section-lead-home">
-        El Mapa del Alma une lectura simbólica, numerología, energía, linaje, propósito, heridas, dones y ritual personalizado en una pieza digital premium.
-      </p>
-    </div>
-  </section>
+<section class="premium-card">
 
-  <section class="section-home section-includes" aria-label="Lista de secciones incluidas">
-    <div class="section-home-inner section-includes-card">
-      <ul class="includes-list includes-list-premium">
-        <li>Significado profundo de tu nombre.</li>
-        <li>Linaje simbólico de tus apellidos.</li>
-        <li>Esencia personal y energía dominante.</li>
-        <li>Zodiaco, elemento, planeta y símbolos relacionados.</li>
-        <li>Numerología y camino personal.</li>
-        <li>Animal espiritual, guía, piedra energética y mensajes de integración.</li>
-        <li>Dones, sombras, herida emocional y propósito.</li>
-        <li>Amor, vínculos, dinero y camino interior.</li>
-        <li>Ritual personalizado con intención simbólica.</li>
-        <li>Afirmaciones y mensaje final.</li>
-        <li>Diseño editorial premium en PDF personalizado.</li>
-        <li>Entrega digital por email mediante link directo de descarga.</li>
-      </ul>
-    </div>
-  </section>
+<h1 class="page-title">Qué incluye</h1>
+<p class="page-text">
+Numerología, propósito, dones, heridas, energía, ritual personalizado y más.
+</p>
 
-  <section class="section-home section-how section-ritual" aria-labelledby="titulo-como-page">
-    <div class="section-home-inner">
-      <p class="delivery-premium-kicker">Cómo funciona</p>
-      <h2 id="titulo-como-page" class="section-heading-home">Cómo comienza tu lectura personalizada</h2>
-      <ol class="how-steps">
-        <li class="how-step"><span class="how-step-num">1</span><span class="how-step-body">Escribes tu nombre, apellidos, email y fecha si deseas incluirla.</span></li>
-        <li class="how-step"><span class="how-step-num">2</span><span class="how-step-body">Se crea tu Mapa del Alma con una lectura emocional, simbólica y visualmente premium.</span></li>
-        <li class="how-step"><span class="how-step-num">3</span><span class="how-step-body">En 24–48 horas recibes un correo con tu link directo de Google Drive.</span></li>
-        <li class="how-step"><span class="how-step-num">4</span><span class="how-step-body">Descargas tu PDF dentro de los 3 días de disponibilidad y lo guardas para siempre.</span></li>
-      </ol>
-      <div class="text-center mt-4"><a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Continuar al pago seguro</a></div>
-    </div>
-  </section>
-
-  <a class="mobile-sticky-cta" href="{{ url_for('main.pedido') }}">Descubrir mi mapa · $27</a>
+</section>
 {% endblock %}

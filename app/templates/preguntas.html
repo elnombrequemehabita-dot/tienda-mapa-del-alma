@@ -1,29 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Preguntas frecuentes · Mapa del Alma{% endblock %}
 {% block content %}
-  <section class="section-home page-hero" aria-labelledby="titulo-faq-page">
-    <div class="section-home-inner">
-      <p class="delivery-premium-kicker">Antes de comprar</p>
-      <h1 id="titulo-faq-page" class="section-heading-home page-heading-xl">Preguntas frecuentes</h1>
-      <p class="section-lead-home section-lead-tight">Aquí tienes las dudas más importantes para comprar con claridad y sin confusión.</p>
-    </div>
-  </section>
+<section class="premium-card">
 
-  <section class="section-home section-faq-premium" aria-label="Preguntas frecuentes">
-    <div class="section-home-inner">
-      <div class="faq-premium-grid">
-        <article class="faq-premium-card"><h3>¿Es un libro físico?</h3><p>No. Por ahora el Mapa del Alma se entrega únicamente como PDF digital premium. No incluye impresión ni envío postal.</p></article>
-        <article class="faq-premium-card"><h3>¿Cuánto tarda la entrega?</h3><p>La entrega se realiza normalmente en 24–48 horas al correo que escribas en el pedido. Revisa también spam, promociones o correo no deseado.</p></article>
-        <article class="faq-premium-card"><h3>¿El link de descarga vence?</h3><p>Sí. El enlace de Google Drive estará activo por 3 días. Después se elimina por seguridad y organización, así que debes descargar tu PDF a tiempo.</p></article>
-        <article class="faq-premium-card"><h3>¿Puedo pedir cambios después de pagar?</h3><p>Una vez iniciado el proceso de creación no se realizan cambios, cancelaciones ni reembolsos, porque es un producto personalizado. Revisa bien tus datos antes de pagar.</p></article>
-        <article class="faq-premium-card"><h3>¿Es una lectura rápida?</h3><p>No. Está pensada como una experiencia simbólica y profunda para leer con calma, sentir, releer y comprender poco a poco.</p></article>
-        <article class="faq-premium-card"><h3>¿Qué datos necesito poner?</h3><p>Necesitas escribir tu nombre, apellidos, correo y, si deseas una lectura más completa, tu fecha de nacimiento. También puedes indicar cómo prefieres que te hablemos.</p></article>
-        <article class="faq-premium-card"><h3>¿Qué pasa si escribo mal mi correo?</h3><p>El PDF se enviará al correo que pongas en el formulario. Por eso es muy importante revisar el email antes de completar el pago.</p></article>
-        <article class="faq-premium-card"><h3>¿Por qué no hay devoluciones?</h3><p>Porque cada Mapa del Alma se crea de forma personalizada con tus datos. Al no ser un producto genérico, no puede revenderse ni reutilizarse para otra persona.</p></article>
-      </div>
-      <div class="text-center mt-4"><a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Quiero descubrir mi mapa</a></div>
-    </div>
-  </section>
+<h1 class="page-title">Preguntas frecuentes</h1>
+<p class="page-text">
+Todo lo relacionado con entrega, formato digital y personalización.
+</p>
 
-  <a class="mobile-sticky-cta" href="{{ url_for('main.pedido') }}">Descubrir mi mapa · $27</a>
+</section>
 {% endblock %}

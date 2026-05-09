@@ -1,49 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Reseñas · Mapa del Alma{% endblock %}
 {% block content %}
-  <section class="section-home page-hero" aria-labelledby="titulo-resenas-page">
-    <div class="section-home-inner">
-      <p class="delivery-premium-kicker">Experiencias reales</p>
-      <h1 id="titulo-resenas-page" class="section-heading-home page-heading-xl">Lo que dicen quienes ya lo tienen</h1>
-      <p class="section-lead-home section-lead-tight">Reseñas verificadas de clientes que ya recibieron su Mapa del Alma.</p>
-    </div>
-  </section>
+<section class="premium-card">
 
-  <section class="section-home section-reviews" aria-label="Reseñas verificadas">
-    <div class="section-home-inner">
-      {% if resenas_resumen %}
-        <div class="reviews-shop-summary" aria-label="Resumen de valoraciones">
-          <div class="reviews-shop-summary__score" aria-hidden="true">{{ "%.1f"|format(resenas_resumen.avg) }}</div>
-          <div class="reviews-shop-summary__body">
-            <div class="reviews-shop-summary__stars" aria-label="{{ '%.1f'|format(resenas_resumen.avg) }} de 5">
-              {% for _ in range(resenas_resumen.full) %}★{% endfor %}
-              {% if resenas_resumen.half %}<span class="reviews-summary-half">★</span>{% endif %}
-              {% for _ in range(resenas_resumen.outline) %}<span class="text-muted">☆</span>{% endfor %}
-            </div>
-            <p class="reviews-shop-summary__meta mb-0"><strong>{{ "%.1f"|format(resenas_resumen.avg) }}</strong> de 5 · <span class="text-muted">{{ resenas_resumen.count }} opinión{% if resenas_resumen.count != 1 %}es{% endif %}</span></p>
-          </div>
-        </div>
-      {% endif %}
+<h1 class="page-title">Reseñas reales</h1>
 
-      {% if resenas_carousel_slides and resenas_carousel_slides|length > 0 %}
-        <div class="reviews-slide-grid reviews-page-grid">
-          {% for slide in resenas_carousel_slides %}
-            {% for r in slide %}
-              <article class="review-card-public">
-                <div class="review-card-public__stars" aria-label="{{ r['rating'] }} de 5">{% for _ in range(r["rating"]) %}★{% endfor %}</div>
-                <p class="review-card-public__quote">“{{ r['comentario'] }}”</p>
-                <p class="review-card-public__meta"><span class="review-card-public__name">{{ r["nombre_cliente"] }}</span><span class="text-muted"> · Pedido verificado</span></p>
-              </article>
-            {% endfor %}
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="review-card-public"><p class="review-card-public__quote mb-0">Aún no hay reseñas publicadas. En cuanto revisemos las primeras, aparecerán aquí.</p></div>
-      {% endif %}
+{% for r in resenas_aprobadas %}
+<div class="premium-card">
+<h3>{{ r.nombre_cliente }}</h3>
+<p>{{ r.comentario }}</p>
+</div>
+{% endfor %}
 
-      <div class="text-center mt-4"><a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Quiero mi Mapa del Alma</a></div>
-    </div>
-  </section>
-
-  <a class="mobile-sticky-cta" href="{{ url_for('main.pedido') }}">Descubrir mi mapa · $27</a>
+</section>
 {% endblock %}

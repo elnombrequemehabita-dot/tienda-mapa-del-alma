@@ -1,50 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Vista previa · Mapa del Alma{% endblock %}
 {% block content %}
-  <section class="section-home page-hero" aria-labelledby="titulo-vista">
-    <div class="section-home-inner section-home-inner-wide">
-      <p class="delivery-premium-kicker">Vista interior</p>
-      <h1 id="titulo-vista" class="section-heading-home page-heading-xl">Así se siente abrir tu Mapa del Alma</h1>
-      <p class="section-lead-home">
-        Una estética de libro especial, con fondos simbólicos, páginas llenas de intención y una presentación que se siente como un regalo personal. Es un producto digital en PDF; las imágenes muestran la intención visual y editorial.
-      </p>
-    </div>
-  </section>
+<section class="premium-card">
 
-  <section class="section-home section-editorial-gallery" aria-label="Galería premium del Mapa del Alma">
-    <div class="section-home-inner section-home-inner-wide">
-      <div class="editorial-gallery-grid editorial-gallery-grid-large">
-        <figure class="editorial-gallery-main">
-          <img src="{{ url_for('static', filename='img/hero_mockup_principal.png') }}" alt="Mockup principal del Mapa del Alma" loading="lazy" decoding="async" />
-          <figcaption>Experiencia digital con sensación editorial</figcaption>
-        </figure>
-        <figure>
-          <img src="{{ url_for('static', filename='img/preview_interior_1.jpeg') }}" alt="Página interior premium 1" loading="lazy" decoding="async" />
-          <figcaption>Páginas interiores</figcaption>
-        </figure>
-        <figure>
-          <img src="{{ url_for('static', filename='img/preview_interior_2.jpeg') }}" alt="Página interior premium 2" loading="lazy" decoding="async" />
-          <figcaption>Lectura simbólica</figcaption>
-        </figure>
-        <figure>
-          <img src="{{ url_for('static', filename='img/preview_interior_3.jpeg') }}" alt="Página interior premium 3" loading="lazy" decoding="async" />
-          <figcaption>Diseño cuidado</figcaption>
-        </figure>
-        <figure>
-          <img src="{{ url_for('static', filename='img/hero_mockup_vertical.png') }}" alt="Portada vertical del Mapa del Alma" loading="lazy" decoding="async" />
-          <figcaption>Portada personalizada</figcaption>
-        </figure>
-      </div>
+<h1 class="page-title">Vista previa</h1>
+<p class="page-text">
+Aquí podrás mostrar previews grandes y elegantes del PDF.
+</p>
 
-      <p class="section-disclaimer-home">
-        Imágenes ilustrativas del estilo visual. El contenido final se adapta a cada persona. Producto digital en PDF; no incluye versión impresa.
-      </p>
-
-      <div class="text-center mt-4">
-        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Quiero descubrir mi mapa</a>
-      </div>
-    </div>
-  </section>
-
-  <a class="mobile-sticky-cta" href="{{ url_for('main.pedido') }}">Descubrir mi mapa · $27</a>
+</section>
 {% endblock %}
