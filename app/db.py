@@ -23,11 +23,19 @@ RESENA_ESTADO_RECHAZADA = "rechazada"
 # ============================================================
 
 def _database_url() -> str:
+    """
+    DATABASE_URL limpia. Render/Supabase usan postgresql://...
+    """
     return (os.getenv("DATABASE_URL") or "").strip()
 
 
 def _use_postgres() -> bool:
-    return bool(_database_url())
+    """
+    True solo cuando DATABASE_URL apunta a PostgreSQL.
+    Evita confundir cualquier valor raro con una conexión Postgres.
+    """
+    url = _database_url().lower()
+    return url.startswith("postgresql://") or url.startswith("postgres://")
 
 
 def _now_iso() -> str:
@@ -76,9 +84,22 @@ def _q(sql: str) -> str:
     """
     Adaptador simple de placeholders.
     El código interno usa ?; PostgreSQL necesita %s.
+
+    IMPORTANTE:
+    En Render con Supabase/PostgreSQL, psycopg2 NO acepta ?.
+    Esta función fuerza la conversión cuando DATABASE_URL es PostgreSQL
+    y también cuando la conexión actual ya es psycopg2.
     """
     if _use_postgres():
         return sql.replace("?", "%s")
+
+    try:
+        db_obj = g.get("db")
+        if db_obj is not None and db_obj.__class__.__module__.startswith("psycopg2"):
+            return sql.replace("?", "%s")
+    except Exception:
+        pass
+
     return sql
 
 
