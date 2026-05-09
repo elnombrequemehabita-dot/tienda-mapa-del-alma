@@ -15,30 +15,25 @@ def _bool_env(name: str, default: bool = False) -> bool:
 
 
 _TRANSLATIONS = {
+    "site.name": "El Nombre Que Me Habita",
     "footer.product": "Mapa del Alma – El Nombre Que Me Habita",
     "footer.rights": "Todos los derechos reservados.",
     "footer.privacy": "Privacidad",
     "footer.terms": "Condiciones",
     "footer.contact": "Contacto",
     "nav.home": "Inicio",
+    "nav.reviews": "Reseñas",
+    "nav.cta": "Comprar ahora",
     "nav.order": "Crear mi Mapa",
     "nav.contact": "Contacto",
     "product.name": "Mapa del Alma",
-    "site.name": "El Nombre Que Me Habita",
+    "ticker.top": "Mapa del Alma personalizado · Entrega digital por email · Pago seguro con Stripe · Tu historia, escrita solo para ti",
+    "ticker.bottom": "Producto digital personalizado · Link de descarga por 3 días · Revisa bien tus datos antes de comprar",
+    "index.title": "Mapa del Alma personalizado · El Nombre Que Me Habita",
 }
 
 
 def _install_template_helpers(app: Flask) -> None:
-    """
-    Registra helpers globales para Jinja.
-
-    Muchos templates usan:
-        {{ t('footer.product') }}
-
-    Si no registramos `t`, Flask lanza:
-        jinja2.exceptions.UndefinedError: 't' is undefined
-    """
-
     def t(key: str, default: str | None = None) -> str:
         if key is None:
             return ""
@@ -112,9 +107,6 @@ def create_app():
 
     _install_template_helpers(app)
 
-    # MUY IMPORTANTE:
-    # No ejecutar init_db() aquí. La base de datos se inicializa diferida
-    # en la primera petición para que Render pueda abrir el puerto rápido.
     try:
         database.init_app(app)
         logger.info("Base de datos registrada para inicialización diferida.")
@@ -122,7 +114,6 @@ def create_app():
         logger.exception("Error registrando inicialización de base de datos: %s", e)
         raise
 
-    # Registrar rutas reales de la tienda.
     try:
         from app.routes import bp as main_bp
         app.register_blueprint(main_bp)

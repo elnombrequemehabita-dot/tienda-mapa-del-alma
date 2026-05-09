@@ -27,20 +27,32 @@
   </head>
 
   <body>
-    <!-- Fondo celestial optimizado: menos elementos, más fluido y sin lag -->
+    <!-- Fondo celestial premium optimizado: estrellas + signos zodiacales + lunas sin lag -->
     <div class="star-rain celestial-sky" aria-hidden="true">
       <span class="star star-bright">✦</span>
+      <span class="star zodiac">♒︎</span>
       <span class="star">✧</span>
+      <span class="star zodiac">♓︎</span>
       <span class="star star-soft">✶</span>
-      <span class="star star-tiny">✦</span>
+      <span class="star zodiac">♈︎</span>
       <span class="star star-bright">✷</span>
-      <span class="star">✦</span>
-      <span class="star star-soft">✧</span>
-      <span class="star star-tiny">✶</span>
+      <span class="star zodiac">♉︎</span>
       <span class="star sparkle">✺</span>
+      <span class="star zodiac">♊︎</span>
+      <span class="star star-tiny">✦</span>
+      <span class="star zodiac">♋︎</span>
       <span class="star sparkle">✧</span>
-      <span class="star moon moon-crescent">☾</span>
+      <span class="star zodiac">♌︎</span>
+      <span class="star moon">☾</span>
+      <span class="star zodiac">♍︎</span>
       <span class="star orb"></span>
+      <span class="star zodiac">♎︎</span>
+      <span class="star star-bright">✦</span>
+      <span class="star zodiac">♏︎</span>
+      <span class="star sparkle">✶</span>
+      <span class="star zodiac">♐︎</span>
+      <span class="star moon">☽</span>
+      <span class="star zodiac">♑︎</span>
     </div>
 <header class="site-nav">
       <div class="inner">
@@ -63,6 +75,16 @@
         </nav>
       </div>
     </header>
+
+    <nav class="premium-subnav" aria-label="Accesos rápidos">
+      <a href="{{ url_for('main.index') }}">⌂ Inicio</a>
+      <a href="{{ url_for('main.index') }}#promesa">✦ ¿Qué es?</a>
+      <a href="{{ url_for('main.index') }}#titulo-incluye">🎁 Incluye</a>
+      <a href="{{ url_for('main.index') }}#resenas">💬 Reseñas</a>
+      <a href="{{ url_for('main.index') }}#faq">❔ Preguntas</a>
+      <a class="premium-subnav-cta" href="{{ url_for('main.pedido') }}">✨ Quiero mi Mapa del Alma</a>
+    </nav>
+
 
     <div class="news-ticker" aria-label="{{ t('ticker.top') }}">
       <div class="news-ticker-track">
