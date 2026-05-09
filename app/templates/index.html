@@ -1,6 +1,153 @@
 {% extends "base.html" %}
 {% block title %}{{ t('index.title') }}{% endblock %}
 {% block content %}
+
+  <style>
+    .hero-price-card ul,
+    .hero-price-card li {
+      position: relative;
+      z-index: 2;
+    }
+
+    .hero-price-card li {
+      margin-bottom: .85rem;
+      line-height: 1.5;
+      align-items: flex-start !important;
+    }
+
+    .hero-price-card li span:last-child,
+    .hero-price-card li p {
+      display: inline-block;
+      max-width: 100%;
+      word-break: break-word;
+    }
+
+    .hero-price-card .hero-price-main {
+      margin-bottom: .55rem !important;
+    }
+
+    .hero-price-card .hero-price-delivery {
+      margin-bottom: 1.2rem !important;
+      line-height: 1.5 !important;
+    }
+
+    .deep-reading-intro-card,
+    .deep-reading-card {
+      background: linear-gradient(145deg, rgba(3,18,41,.72), rgba(2,8,23,.82));
+      border: 1px solid rgba(189,238,255,.12);
+      border-radius: 1.35rem;
+      padding: 1.2rem 1.25rem;
+      box-shadow: 0 14px 36px rgba(0,8,30,.28);
+      backdrop-filter: blur(4px);
+    }
+
+    .deep-reading-intro-card {
+      margin-bottom: 1rem;
+    }
+
+    .deep-reading-card p + p {
+      margin-top: 1rem;
+    }
+
+    .deep-reading-grid {
+      margin-top: 1.35rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+    }
+
+    .deep-reading-grid article {
+      background: linear-gradient(145deg, rgba(3,18,41,.72), rgba(2,8,23,.82));
+      border: 1px solid rgba(189,238,255,.12);
+      border-radius: 1.25rem;
+      padding: 1.15rem;
+      box-shadow: 0 14px 36px rgba(0,8,30,.22);
+      text-align: left;
+    }
+
+    .deep-reading-grid article span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.3rem;
+      height: 2.3rem;
+      border-radius: 999px;
+      margin-bottom: .8rem;
+      background: rgba(217,173,95,.10);
+      color: rgba(243,220,154,.96);
+      font-size: 1rem;
+    }
+
+    .deep-reading-grid article h3 {
+      margin: 0 0 .45rem;
+      color: rgba(243,220,154,.96);
+      font-size: 1.1rem;
+    }
+
+    .deep-reading-grid article p {
+      margin: 0;
+      color: rgba(232,247,255,.86);
+      line-height: 1.55;
+      font-size: .94rem;
+    }
+
+    @media (max-width: 767px) {
+      .hero-price-card li {
+        font-size: .92rem;
+      }
+
+      .deep-reading-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+
+
+  <style>
+    .section-faq-premium {
+      border-radius: 1.5rem;
+      background: linear-gradient(180deg, rgba(3, 13, 31, .28), rgba(2, 8, 23, .18));
+      border: 1px solid rgba(189, 238, 255, .06);
+    }
+
+    .faq-premium-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+      margin-top: 1.35rem;
+    }
+
+    .faq-premium-card {
+      background: linear-gradient(145deg, rgba(3, 18, 41, .72), rgba(2, 8, 23, .82));
+      border: 1px solid rgba(189, 238, 255, .12);
+      border-radius: var(--radius-lg, 1.25rem);
+      box-shadow: 0 14px 36px rgba(0, 8, 30, .26);
+      padding: 1.05rem 1.1rem;
+      backdrop-filter: blur(4px);
+    }
+
+    .faq-premium-card h3 {
+      margin: 0 0 .45rem;
+      font-family: var(--font-display, Georgia, serif);
+      font-size: 1.18rem;
+      color: rgba(243, 220, 154, .96);
+      line-height: 1.2;
+    }
+
+    .faq-premium-card p {
+      margin: 0;
+      color: rgba(232, 247, 255, .86);
+      font-size: .95rem;
+      line-height: 1.55;
+    }
+
+    @media (max-width: 767px) {
+      .faq-premium-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+
   {# ==========================================================
      HOME PREMIUM — EL NOMBRE QUE ME HABITA
      Objetivo: vender una experiencia emocional, íntima y exclusiva.
@@ -130,11 +277,13 @@
         No es un PDF cualquiera que lees en cinco minutos.
       </h2>
 
-      <p class="section-lead-home">
-        El Mapa del Alma está pensado para leerse con calma, como una experiencia íntima. No es una hoja genérica ni una respuesta rápida:
-        es una lectura personalizada que reúne capas de tu nombre, tus apellidos, tu energía, tus símbolos, tus patrones, tus dones,
-        tus desafíos y tu forma particular de habitar el mundo.
-      </p>
+      <div class="deep-reading-intro-card">
+        <p class="section-lead-home">
+          El Mapa del Alma está pensado para leerse con calma, como una experiencia íntima. No es una hoja genérica ni una respuesta rápida:
+          es una lectura personalizada que reúne capas de tu nombre, tus apellidos, tu energía, tus símbolos, tus patrones, tus dones,
+          tus desafíos y tu forma particular de habitar el mundo.
+        </p>
+      </div>
 
       <div class="deep-reading-card">
         <p>
@@ -447,6 +596,60 @@
       <div class="text-center final-cta-actions">
         <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Quiero descubrir mi mapa</a>
         <p class="final-cta-trust">Pago seguro · Producto personalizado · Entrega digital por correo · Link activo por 3 días</p>
+      </div>
+    </div>
+  </section>
+
+
+  {# ========== PREGUNTAS FRECUENTES ========== #}
+  <section id="faq" class="section-home section-faq-premium" aria-labelledby="titulo-faq">
+    <div class="section-home-inner">
+      <p class="delivery-premium-kicker">Antes de comprar</p>
+      <h2 id="titulo-faq" class="section-heading-home">Preguntas frecuentes</h2>
+      <p class="section-lead-home section-lead-tight">
+        Aquí tienes las dudas más importantes para que compres con claridad y sin confusión.
+      </p>
+
+      <div class="faq-premium-grid">
+        <article class="faq-premium-card">
+          <h3>¿Es un libro físico?</h3>
+          <p>No. Por ahora el Mapa del Alma se entrega únicamente como PDF digital premium. No incluye impresión ni envío postal.</p>
+        </article>
+
+        <article class="faq-premium-card">
+          <h3>¿Cuánto tarda la entrega?</h3>
+          <p>La entrega se realiza normalmente en 24–48 horas al correo que escribas en el pedido. Revisa también spam, promociones o correo no deseado.</p>
+        </article>
+
+        <article class="faq-premium-card">
+          <h3>¿El link de descarga vence?</h3>
+          <p>Sí. El enlace de Google Drive estará activo por 3 días. Después se elimina por seguridad y organización, así que debes descargar tu PDF a tiempo.</p>
+        </article>
+
+        <article class="faq-premium-card">
+          <h3>¿Puedo pedir cambios después de pagar?</h3>
+          <p>Una vez iniciado el proceso de creación no se realizan cambios, cancelaciones ni reembolsos, porque es un producto personalizado. Revisa bien tus datos antes de pagar.</p>
+        </article>
+
+        <article class="faq-premium-card">
+          <h3>¿Es una lectura rápida?</h3>
+          <p>No. No está pensado como un PDF cualquiera que lees en cinco minutos. Es una experiencia simbólica y profunda para leer con calma, sentir, releer y comprender poco a poco.</p>
+        </article>
+
+        <article class="faq-premium-card">
+          <h3>¿Qué datos necesito poner?</h3>
+          <p>Necesitas escribir tu nombre, apellidos, correo y, si deseas una lectura más completa, tu fecha de nacimiento. También puedes indicar cómo prefieres que te hablemos en el texto.</p>
+        </article>
+
+        <article class="faq-premium-card">
+          <h3>¿Qué pasa si escribo mal mi correo?</h3>
+          <p>El PDF se enviará al correo que pongas en el formulario. Por eso es muy importante revisar el email antes de completar el pago.</p>
+        </article>
+
+        <article class="faq-premium-card">
+          <h3>¿Por qué no hay devoluciones?</h3>
+          <p>Porque cada Mapa del Alma se crea de forma personalizada con tus datos. Al no ser un producto genérico, no puede revenderse ni reutilizarse para otra persona.</p>
+        </article>
       </div>
     </div>
   </section>
