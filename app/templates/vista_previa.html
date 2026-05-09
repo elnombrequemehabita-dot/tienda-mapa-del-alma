@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Vista previa · {{ t('site.name') }}{% endblock %}
 {% block content %}
-  <section class="section-home section-editorial-gallery" aria-labelledby="preview-title">
+  <section class="section-home section-editorial-gallery premium-page-shell" aria-labelledby="preview-title">
+    <div class="premium-sticker premium-sticker--one" aria-hidden="true">✧</div>
+    <div class="premium-sticker premium-sticker--two" aria-hidden="true">☾</div>
     <div class="section-home-inner section-home-inner-wide">
       <p class="delivery-premium-kicker">Vista interior</p>
       <h1 id="preview-title" class="section-heading-home">Mira cómo se siente por dentro</h1>
@@ -20,9 +22,22 @@
         </figure>
       </div>
 
+      <div class="delivery-details-grid mt-4">
+        <article class="delivery-detail-card">
+          <span class="delivery-detail-icon" aria-hidden="true">✦</span>
+          <h3>Diseño editorial</h3>
+          <p>Páginas con atmósfera profunda, textos cuidados y lectura visualmente agradable.</p>
+        </article>
+        <article class="delivery-detail-card">
+          <span class="delivery-detail-icon" aria-hidden="true">☾</span>
+          <h3>PDF digital</h3>
+          <p>Recibirás tu mapa por email mediante un link directo de descarga.</p>
+        </article>
+      </div>
+
       <div class="hero-cta mt-4">
-        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Crear mi Mapa</a>
-        <a class="btn-outline" href="{{ url_for('main.incluye') }}">Ver qué incluye</a>
+        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">✨ Crear mi Mapa</a>
+        <a class="btn-outline" href="{{ url_for('main.incluye') }}">❖ Ver qué incluye</a>
       </div>
     </div>
   </section>

@@ -1466,3 +1466,234 @@ body {
     width: min(92vw, 20rem) !important;
   }
 }
+
+/* =========================================================
+   FIX FINAL UX PREMIUM — navegación, home corto, stickers
+   ========================================================= */
+
+.site-nav {
+  background:
+    linear-gradient(180deg, rgba(3, 10, 26, .94), rgba(5, 12, 30, .86)) !important;
+  border-bottom: 1px solid rgba(189, 238, 255, .10) !important;
+}
+
+.site-nav .inner {
+  max-width: 88rem;
+  padding: .62rem 1rem;
+}
+
+.brand-with-logo {
+  white-space: nowrap;
+  max-width: min(100%, 22rem) !important;
+}
+
+.brand-logo {
+  height: clamp(2.65rem, 8vw, 4.45rem) !important;
+  max-width: 5.2rem !important;
+}
+
+.brand-text {
+  font-size: clamp(1.18rem, 3.2vw, 1.82rem) !important;
+  white-space: nowrap;
+  line-height: 1 !important;
+}
+
+.nav-links {
+  gap: .38rem !important;
+}
+
+.nav-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: .28rem;
+  border: 1px solid transparent;
+  color: rgba(232, 247, 255, .82) !important;
+  background: rgba(255, 255, 255, .025);
+}
+
+.nav-links a span {
+  color: rgba(240, 221, 176, .88);
+  font-size: .86em;
+}
+
+.nav-links a.active,
+.nav-links .btn-nav.active {
+  background: linear-gradient(135deg, rgba(214, 176, 106, .18), rgba(56, 189, 248, .08)) !important;
+  border-color: rgba(214, 176, 106, .34) !important;
+  color: var(--color-accent-soft) !important;
+  box-shadow:
+    0 0 0 1px rgba(214, 176, 106, .08),
+    0 0 20px rgba(56, 189, 248, .10);
+}
+
+.nav-links .btn-nav {
+  background: linear-gradient(135deg,#8f2e59,#d6b06a) !important;
+  color: #fff !important;
+  border-color: rgba(240,221,176,.28) !important;
+}
+
+.home-hero-clean {
+  border-radius: 1.75rem;
+  margin-top: .75rem;
+  background:
+    radial-gradient(circle at 50% 8%, rgba(56, 189, 248, .13), transparent 30%),
+    radial-gradient(circle at 82% 20%, rgba(214, 176, 106, .08), transparent 32%),
+    linear-gradient(180deg, rgba(2, 8, 23, .92), rgba(6, 13, 31, .82) 52%, rgba(13, 16, 34, .72));
+  border: 1px solid rgba(189, 238, 255, .08);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .34);
+}
+
+.home-hero-clean::after,
+.premium-page-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle, rgba(232,248,255,.32) 0 1px, transparent 1.4px),
+    radial-gradient(circle, rgba(240,221,176,.20) 0 1px, transparent 1.45px);
+  background-size: 145px 145px, 235px 235px;
+  background-position: 12px 18px, 80px 110px;
+  opacity: .32;
+  border-radius: inherit;
+}
+
+.hero-premium-book-wrap-clean {
+  max-width: 40rem;
+  opacity: .96;
+}
+
+.home-preview-section .editorial-gallery-grid-home {
+  max-width: 44rem;
+  margin: 0 auto;
+}
+
+.reviews-slide-grid-home {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.premium-page-shell {
+  position: relative;
+  overflow: hidden;
+  min-height: min(72vh, 46rem);
+}
+
+.premium-page-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.premium-page-card::after,
+.delivery-detail-card::after,
+.review-card-public::after {
+  content: "✦";
+  position: absolute;
+  right: 1rem;
+  top: .9rem;
+  color: rgba(240, 221, 176, .18);
+  font-size: 1.35rem;
+  pointer-events: none;
+}
+
+.premium-sticker {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: clamp(2.5rem, 7vw, 4.2rem);
+  height: clamp(2.5rem, 7vw, 4.2rem);
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(189,238,255,.12), rgba(2,8,23,.02));
+  border: 1px solid rgba(189,238,255,.12);
+  color: rgba(240,221,176,.78);
+  text-shadow: 0 0 18px rgba(125,211,252,.22);
+  box-shadow: 0 18px 50px rgba(0,0,0,.25);
+  opacity: .68;
+  pointer-events: none;
+}
+
+.premium-sticker--one {
+  left: clamp(.65rem, 4vw, 2rem);
+  top: clamp(1rem, 5vw, 3rem);
+}
+
+.premium-sticker--two {
+  right: clamp(.65rem, 4vw, 2.2rem);
+  top: clamp(7rem, 18vw, 11rem);
+}
+
+.premium-sticker--three {
+  left: clamp(1rem, 12vw, 10rem);
+  bottom: clamp(1rem, 6vw, 3rem);
+}
+
+.section-final-cta {
+  border-radius: 1.75rem;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(56,189,248,.12), transparent 35%),
+    linear-gradient(180deg, rgba(3,13,31,.68), rgba(2,8,23,.48));
+  border: 1px solid rgba(189,238,255,.08);
+}
+
+@media (max-width: 991px) {
+  .site-nav .inner {
+    align-items: flex-start;
+  }
+
+  .brand-with-logo {
+    max-width: 100% !important;
+  }
+
+  .nav-links {
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    flex-wrap: nowrap !important;
+    padding-bottom: .28rem;
+    scrollbar-width: thin;
+  }
+
+  .nav-links a {
+    flex: 0 0 auto;
+    font-size: .82rem;
+  }
+}
+
+@media (max-width: 575px) {
+  main {
+    padding-left: .65rem;
+    padding-right: .65rem;
+  }
+
+  .site-nav .inner {
+    padding-left: .65rem;
+    padding-right: .65rem;
+  }
+
+  .brand-logo {
+    height: 2.55rem !important;
+    max-width: 3.2rem !important;
+  }
+
+  .brand-text {
+    font-size: 1.14rem !important;
+  }
+
+  .home-hero-clean {
+    margin-top: .35rem;
+    padding-top: 1.45rem;
+  }
+
+  .hero-subline-premium {
+    font-size: .98rem;
+  }
+
+  .premium-sticker {
+    opacity: .42;
+  }
+
+  .premium-sticker--two,
+  .premium-sticker--three {
+    display: none;
+  }
+}

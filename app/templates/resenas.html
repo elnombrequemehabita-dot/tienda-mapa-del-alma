@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Reseñas · {{ t('site.name') }}{% endblock %}
 {% block content %}
-  <section class="section-home section-reviews" id="resenas" aria-labelledby="reviews-title">
+  <section class="section-home section-reviews premium-page-shell" id="resenas" aria-labelledby="reviews-title">
+    <div class="premium-sticker premium-sticker--one" aria-hidden="true">♡</div>
+    <div class="premium-sticker premium-sticker--two" aria-hidden="true">✦</div>
     <div class="section-home-inner">
       <p class="delivery-premium-kicker">Experiencias reales</p>
       <h1 id="reviews-title" class="section-heading-home">Lo que dicen quienes ya lo tienen</h1>
@@ -37,13 +39,13 @@
         </div>
       {% else %}
         <div class="product-card text-center">
-          <p class="mb-0">Aún no hay reseñas publicadas.</p>
+          <p class="mb-0">Aún no hay reseñas publicadas. Cuando apruebes una reseña desde el panel, aparecerá aquí.</p>
         </div>
       {% endif %}
 
       <div class="hero-cta mt-4">
-        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Quiero vivir mi experiencia</a>
-        <a class="btn-outline" href="{{ url_for('main.preguntas') }}">Ver preguntas frecuentes</a>
+        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">✨ Quiero vivir mi experiencia</a>
+        <a class="btn-outline" href="{{ url_for('main.preguntas') }}">? Ver preguntas frecuentes</a>
       </div>
     </div>
   </section>

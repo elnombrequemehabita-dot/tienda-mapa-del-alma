@@ -1,34 +1,36 @@
 {% extends "base.html" %}
 {% block title %}Qué incluye tu Mapa del Alma · {{ t('site.name') }}{% endblock %}
 {% block content %}
-  <section class="section-home section-delivery-premium" aria-labelledby="page-title">
+  <section class="section-home section-delivery-premium premium-page-shell" aria-labelledby="page-title">
+    <div class="premium-sticker premium-sticker--one" aria-hidden="true">☾</div>
+    <div class="premium-sticker premium-sticker--two" aria-hidden="true">✦</div>
     <div class="section-home-inner">
       <p class="delivery-premium-kicker">Más que páginas bonitas</p>
       <h1 id="page-title" class="section-heading-home">Qué incluye tu Mapa del Alma</h1>
       <p class="section-lead-home">Cada mapa reúne secciones simbólicas y emocionales pensadas para crear una lectura profunda, coherente y personalizada.</p>
 
       <div class="delivery-details-grid">
-        <article class="delivery-detail-card">
+        <article class="delivery-detail-card premium-page-card">
           <span class="delivery-detail-icon" aria-hidden="true">✦</span>
           <h3>Nombre y apellidos</h3>
           <p>Lectura simbólica de identidad, origen emocional y linaje personal.</p>
         </article>
-        <article class="delivery-detail-card">
+        <article class="delivery-detail-card premium-page-card">
           <span class="delivery-detail-icon" aria-hidden="true">☾</span>
           <h3>Numerología y energía</h3>
           <p>Capas simbólicas que ayudan a mirar patrones, dones y caminos interiores.</p>
         </article>
-        <article class="delivery-detail-card">
+        <article class="delivery-detail-card premium-page-card">
           <span class="delivery-detail-icon" aria-hidden="true">✧</span>
           <h3>Dones, sombras y propósito</h3>
           <p>Un recorrido emocional para reconocer fuerza, desafíos y dirección personal.</p>
         </article>
-        <article class="delivery-detail-card">
+        <article class="delivery-detail-card premium-page-card">
           <span class="delivery-detail-icon" aria-hidden="true">♡</span>
           <h3>Ritual personalizado</h3>
           <p>Una práctica simbólica alineada con la energía central de la lectura.</p>
         </article>
-        <article class="delivery-detail-card">
+        <article class="delivery-detail-card premium-page-card">
           <span class="delivery-detail-icon" aria-hidden="true">✺</span>
           <h3>Mensaje final</h3>
           <p>Cierre emocional pensado para dejar una sensación de claridad, calma y pertenencia.</p>
@@ -36,8 +38,8 @@
       </div>
 
       <div class="hero-cta mt-4">
-        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Quiero mi Mapa del Alma</a>
-        <a class="btn-outline" href="{{ url_for('main.index') }}">Volver al inicio</a>
+        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">✨ Quiero mi Mapa del Alma</a>
+        <a class="btn-outline" href="{{ url_for('main.index') }}">✦ Volver al inicio</a>
       </div>
     </div>
   </section>

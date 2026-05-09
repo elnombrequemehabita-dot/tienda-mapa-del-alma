@@ -1,38 +1,40 @@
 {% extends "base.html" %}
 {% block title %}Qué es el Mapa del Alma · {{ t('site.name') }}{% endblock %}
 {% block content %}
-  <section class="section-home section-delivery-premium" aria-labelledby="page-title">
+  <section class="section-home section-delivery-premium premium-page-shell" aria-labelledby="page-title">
+    <div class="premium-sticker premium-sticker--one" aria-hidden="true">☾</div>
+    <div class="premium-sticker premium-sticker--two" aria-hidden="true">✦</div>
     <div class="section-home-inner">
       <p class="delivery-premium-kicker">Una lectura íntima y simbólica</p>
       <h1 id="page-title" class="section-heading-home">Qué es el Mapa del Alma</h1>
       <p class="section-lead-home">No es una lectura rápida ni una plantilla. Es una pieza digital personalizada que une nombre, apellidos, energía, símbolos y lenguaje emocional para crear una experiencia de reconocimiento.</p>
 
       <div class="delivery-details-grid">
-        <article class="delivery-detail-card">
+        <article class="delivery-detail-card premium-page-card">
           <span class="delivery-detail-icon" aria-hidden="true">✦</span>
           <h3>Creado con tus datos</h3>
-          <p>El contenido se genera con la información del pedido para construir una lectura única y coherente.</p>
+          <p>El contenido se construye a partir de la información del pedido para que la lectura se sienta única y coherente.</p>
         </article>
-        <article class="delivery-detail-card">
+        <article class="delivery-detail-card premium-page-card">
           <span class="delivery-detail-icon" aria-hidden="true">☾</span>
           <h3>Diseñado para sentirse personal</h3>
-          <p>La intención no es llenar páginas: es crear una experiencia que la persona quiera releer con calma.</p>
+          <p>La intención no es llenar páginas, sino crear una experiencia que la persona quiera leer con calma.</p>
         </article>
-        <article class="delivery-detail-card">
+        <article class="delivery-detail-card premium-page-card">
           <span class="delivery-detail-icon" aria-hidden="true">✧</span>
           <h3>Una pieza digital premium</h3>
-          <p>Se entrega como PDF personalizado, con diseño editorial y estética celestial azul profunda.</p>
+          <p>Se entrega como PDF personalizado con diseño editorial, atmósfera azul profunda y detalles celestiales.</p>
         </article>
-        <article class="delivery-detail-card">
+        <article class="delivery-detail-card premium-page-card">
           <span class="delivery-detail-icon" aria-hidden="true">♡</span>
           <h3>Para volver a ti</h3>
-          <p>El mapa busca que la persona se vea con más claridad, ternura y conciencia de su propio camino.</p>
+          <p>El mapa busca que la persona se mire con más claridad, ternura y conciencia de su propio camino.</p>
         </article>
       </div>
 
       <div class="hero-cta mt-4">
-        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Quiero mi Mapa del Alma</a>
-        <a class="btn-outline" href="{{ url_for('main.index') }}">Volver al inicio</a>
+        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">✨ Quiero mi Mapa del Alma</a>
+        <a class="btn-outline" href="{{ url_for('main.index') }}">✦ Volver al inicio</a>
       </div>
     </div>
   </section>

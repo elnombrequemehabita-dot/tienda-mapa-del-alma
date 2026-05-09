@@ -323,28 +323,23 @@ def robots_txt():
 
 
 
-
 @bp.route("/que-es")
 def que_es():
-    """Página editorial: qué es el Mapa del Alma."""
     return render_template("que_es.html")
 
 
 @bp.route("/vista-previa")
 def vista_previa():
-    """Página editorial con vista previa del PDF."""
     return render_template("vista_previa.html")
 
 
 @bp.route("/incluye")
 def incluye():
-    """Página editorial con lo que incluye el producto."""
     return render_template("incluye.html")
 
 
 @bp.route("/preguntas")
 def preguntas():
-    """Página de preguntas frecuentes."""
     return render_template("preguntas.html")
 
 
