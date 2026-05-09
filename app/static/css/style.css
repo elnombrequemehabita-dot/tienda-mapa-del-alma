@@ -892,3 +892,241 @@ button.btn-primary-lg {
     opacity: 0.92 !important;
   }
 }
+
+
+/* =========================================================
+   PERFORMANCE + PREMIUM POLISH PATCH
+   Añadido para corregir lag, botones débiles y scroll pesado.
+   ========================================================= */
+
+/* Menos trabajo gráfico en scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background:
+    radial-gradient(circle at 50% -10%, rgba(14, 165, 233, .16), transparent 32%),
+    linear-gradient(180deg, #04132b 0%, #061228 42%, #030817 100%) !important;
+}
+
+/* Header más limpio y menos pesado */
+.site-nav {
+  background: rgba(2, 10, 28, .86) !important;
+  border-bottom: 1px solid rgba(125, 211, 252, .18) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+.brand-logo {
+  filter: drop-shadow(0 0 12px rgba(56,189,248,.22)) !important;
+}
+
+/* Botones más grandes, clickeables y premium */
+.btn-primary-lg,
+.mobile-floating-cta a,
+.nav-links .btn-nav,
+button.btn-primary-lg {
+  min-height: 46px !important;
+  padding: .92rem 1.35rem !important;
+  border-radius: 999px !important;
+  font-size: .92rem !important;
+  font-weight: 900 !important;
+  letter-spacing: .01em !important;
+  background: linear-gradient(135deg, #e0f7ff 0%, #7dd3fc 28%, #0ea5e9 68%, #075985 100%) !important;
+  color: #02101f !important;
+  border: 1px solid rgba(224, 247, 255, .62) !important;
+  box-shadow:
+    0 12px 30px rgba(14, 165, 233, .28),
+    inset 0 1px 0 rgba(255,255,255,.45) !important;
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+.btn-primary-lg:hover,
+.mobile-floating-cta a:hover,
+.nav-links .btn-nav:hover {
+  transform: translateY(-1px) translateZ(0) !important;
+  filter: brightness(1.06) saturate(1.04) !important;
+  box-shadow:
+    0 16px 38px rgba(14, 165, 233, .36),
+    inset 0 1px 0 rgba(255,255,255,.52) !important;
+}
+
+.btn-outline {
+  min-height: 46px !important;
+  padding: .88rem 1.25rem !important;
+  border-radius: 999px !important;
+  background: rgba(7, 26, 61, .54) !important;
+  color: #dff7ff !important;
+  border: 1px solid rgba(125, 211, 252, .30) !important;
+  box-shadow: none !important;
+}
+
+.btn-outline:hover {
+  background: rgba(14, 165, 233, .16) !important;
+  color: #ffffff !important;
+}
+
+/* Hero más fuerte y menos comprimido */
+.hero-cinematic {
+  padding-top: clamp(2.8rem, 6vw, 5rem) !important;
+}
+
+.hero-cinematic__visual {
+  margin-top: .5rem !important;
+  margin-bottom: 1.35rem !important;
+}
+
+.hero-mapa-wrap-premium {
+  width: min(66vw, 18rem) !important;
+}
+
+.hero-premium-book-img,
+.editorial-gallery-grid img,
+.mockup-img,
+.pdf-thumb-card img {
+  content-visibility: auto;
+}
+
+.hero h1,
+.section-heading-home {
+  text-wrap: balance;
+}
+
+.hero h1 {
+  font-size: clamp(2.15rem, 7.2vw, 3.7rem) !important;
+  color: #f5fbff !important;
+  text-shadow:
+    0 0 18px rgba(56, 189, 248, .20),
+    0 14px 34px rgba(0, 0, 0, .52) !important;
+}
+
+.hero-subline {
+  color: #d8efff !important;
+}
+
+/* Precio más premium */
+.hero-price-card {
+  background: linear-gradient(145deg, rgba(2, 15, 38, .95), rgba(6, 22, 50, .90)) !important;
+  border: 1px solid rgba(125,211,252,.24) !important;
+  box-shadow:
+    0 18px 46px rgba(0, 8, 30, .46),
+    0 0 22px rgba(56,189,248,.08) !important;
+}
+
+.hero-price-value {
+  font-size: clamp(2.25rem, 7vw, 3.2rem) !important;
+  color: #ffffff !important;
+}
+
+.hero-price-currency {
+  font-size: .72rem !important;
+  padding: .18rem .42rem !important;
+  border-radius: 999px !important;
+}
+
+/* Tarjetas con menos blur/sombra para que el scroll respire */
+.delivery-detail-card,
+.reveal-card,
+.emotional-quote-card,
+.not-for-card,
+.section-includes-card,
+.review-card-public,
+.product-card,
+.thanks-card,
+.resena-card,
+.contact-card {
+  background: linear-gradient(145deg, rgba(3, 16, 41, .86), rgba(2, 9, 26, .92)) !important;
+  border: 1px solid rgba(125, 211, 252, .16) !important;
+  box-shadow: 0 12px 28px rgba(0, 8, 30, .32) !important;
+}
+
+/* Secciones más limpias */
+.section-delivery-premium,
+.section-reveal-premium,
+.section-editorial-gallery,
+.section-soul-promise,
+.section-ritual {
+  background: linear-gradient(180deg, rgba(3, 12, 35, .28), rgba(2, 8, 24, .18)) !important;
+  border: 1px solid rgba(125,211,252,.06);
+}
+
+/* Ticker más suave */
+.news-ticker-track {
+  animation-duration: 44s !important;
+}
+
+/* Evita que elementos decorativos intercepten capas */
+.star-rain,
+.celestial-sky,
+.cosmic-decor {
+  pointer-events: none !important;
+}
+
+/* Móvil: mejor lectura y CTA */
+@media (max-width: 767px) {
+  body::before {
+    opacity: .60;
+  }
+
+  .site-nav .inner {
+    align-items: center !important;
+  }
+
+  .brand-with-logo {
+    max-width: 58% !important;
+  }
+
+  .nav-links a:not(.btn-nav) {
+    display: none !important;
+  }
+
+  .nav-links .btn-nav {
+    font-size: .75rem !important;
+    min-height: 38px !important;
+    padding: .55rem .78rem !important;
+  }
+
+  .hero {
+    padding-top: 2.4rem !important;
+  }
+
+  .hero h1 {
+    font-size: clamp(2.15rem, 9.5vw, 3rem) !important;
+  }
+
+  .hero-subline {
+    font-size: 1rem !important;
+    line-height: 1.56 !important;
+  }
+
+  .hero-cta {
+    width: 100%;
+  }
+
+  .hero-cta .btn-primary-lg,
+  .hero-cta .btn-outline {
+    width: min(100%, 22rem);
+  }
+
+  .section-home {
+    padding-top: 2.9rem !important;
+    padding-bottom: 2.9rem !important;
+  }
+
+  .delivery-detail-card,
+  .reveal-card,
+  .emotional-quote-card,
+  .not-for-card {
+    padding: 1rem !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .news-ticker-track,
+  .btn-primary-lg,
+  .btn-outline {
+    animation: none !important;
+    transition: none !important;
+  }
+}
