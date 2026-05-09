@@ -1536,11 +1536,11 @@ body {
   border-radius: 1.75rem;
   margin-top: .75rem;
   background:
-    radial-gradient(circle at 50% 8%, rgba(56, 189, 248, .13), transparent 30%),
-    radial-gradient(circle at 82% 20%, rgba(214, 176, 106, .08), transparent 32%),
-    linear-gradient(180deg, rgba(2, 8, 23, .92), rgba(6, 13, 31, .82) 52%, rgba(13, 16, 34, .72));
-  border: 1px solid rgba(189, 238, 255, .08);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, .34);
+    radial-gradient(circle at 50% 8%, rgba(56, 189, 248, .10), transparent 34%),
+    radial-gradient(circle at 82% 20%, rgba(214, 176, 106, .055), transparent 36%),
+    linear-gradient(180deg, rgba(2, 8, 23, .62), rgba(6, 13, 31, .50) 52%, rgba(13, 16, 34, .42));
+  border: 1px solid rgba(189, 238, 255, .075);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .22);
 }
 
 .home-hero-clean::after,
@@ -1554,7 +1554,7 @@ body {
     radial-gradient(circle, rgba(240,221,176,.20) 0 1px, transparent 1.45px);
   background-size: 145px 145px, 235px 235px;
   background-position: 12px 18px, 80px 110px;
-  opacity: .32;
+  opacity: .22;
   border-radius: inherit;
 }
 
@@ -1695,5 +1695,70 @@ body {
   .premium-sticker--two,
   .premium-sticker--three {
     display: none;
+  }
+}
+
+/* =========================================================
+   Preguntas frecuentes — versión más explicativa
+   ========================================================= */
+
+.faq-rich-grid {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.faq-rich-card {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(3, 18, 41, .70), rgba(2, 8, 23, .78));
+  border: 1px solid rgba(189, 238, 255, .11);
+  border-radius: var(--radius-lg);
+  padding: 1.15rem 1.2rem;
+  box-shadow: 0 14px 36px rgba(0, 8, 30, .22);
+  backdrop-filter: blur(5px);
+}
+
+.faq-rich-card::before {
+  content: "✦";
+  position: absolute;
+  right: 1rem;
+  top: .85rem;
+  color: rgba(240, 221, 176, .16);
+  font-size: 1.4rem;
+  pointer-events: none;
+}
+
+.faq-rich-card h3 {
+  margin: 0 0 .55rem;
+  font-family: var(--font-display);
+  color: rgba(243, 220, 154, .96);
+  font-size: clamp(1.15rem, 3vw, 1.38rem);
+  line-height: 1.2;
+}
+
+.faq-rich-card p {
+  margin: 0;
+  color: rgba(232, 247, 255, .86);
+  line-height: 1.62;
+  font-size: .96rem;
+}
+
+.faq-rich-card p + p {
+  margin-top: .7rem;
+}
+
+.faq-note-card {
+  margin-top: 1.25rem;
+  text-align: center;
+}
+
+@media (min-width: 850px) {
+  .faq-rich-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .faq-rich-card--wide {
+    grid-column: 1 / -1;
   }
 }
