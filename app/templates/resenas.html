@@ -1,15 +1,50 @@
 {% extends "base.html" %}
+{% block title %}Reseñas · {{ t('site.name') }}{% endblock %}
 {% block content %}
-<section class="premium-card">
+  <section class="section-home section-reviews" id="resenas" aria-labelledby="reviews-title">
+    <div class="section-home-inner">
+      <p class="delivery-premium-kicker">Experiencias reales</p>
+      <h1 id="reviews-title" class="section-heading-home">Lo que dicen quienes ya lo tienen</h1>
+      <p class="section-lead-home">
+        Reseñas verificadas de clientes que ya recibieron su Mapa del Alma.
+      </p>
 
-<h1 class="page-title">Reseñas reales</h1>
+      {% if resenas_resumen %}
+        <div class="reviews-shop-summary">
+          <div class="reviews-shop-summary__score">{{ "%.1f"|format(resenas_resumen.avg) }}</div>
+          <div>
+            <div class="reviews-shop-summary__stars" aria-hidden="true">
+              {% for _ in range(resenas_resumen.full) %}★{% endfor %}{% if resenas_resumen.half %}½{% endif %}{% for _ in range(resenas_resumen.outline) %}☆{% endfor %}
+            </div>
+            <p class="mb-0 small text-muted">{{ "%.1f"|format(resenas_resumen.avg) }} de 5 · {{ resenas_resumen.count }} opiniones</p>
+          </div>
+        </div>
+      {% endif %}
 
-{% for r in resenas_aprobadas %}
-<div class="premium-card">
-<h3>{{ r.nombre_cliente }}</h3>
-<p>{{ r.comentario }}</p>
-</div>
-{% endfor %}
+      {% if resenas_aprobadas %}
+        <div class="reviews-slide-grid">
+          {% for r in resenas_aprobadas %}
+            <article class="review-card-public">
+              <div class="review-card-public__stars" aria-hidden="true">
+                {% for _ in range(r.rating or 5) %}★{% endfor %}
+              </div>
+              <p class="review-card-public__quote">“{{ r.comentario }}”</p>
+              <p class="review-card-public__meta">
+                <span class="review-card-public__name">{{ r.nombre_cliente }}</span> · Pedido verificado
+              </p>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="product-card text-center">
+          <p class="mb-0">Aún no hay reseñas publicadas.</p>
+        </div>
+      {% endif %}
 
-</section>
+      <div class="hero-cta mt-4">
+        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Quiero vivir mi experiencia</a>
+        <a class="btn-outline" href="{{ url_for('main.preguntas') }}">Ver preguntas frecuentes</a>
+      </div>
+    </div>
+  </section>
 {% endblock %}

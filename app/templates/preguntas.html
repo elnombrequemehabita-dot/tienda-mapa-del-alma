@@ -1,11 +1,44 @@
 {% extends "base.html" %}
+{% block title %}Preguntas frecuentes · {{ t('site.name') }}{% endblock %}
 {% block content %}
-<section class="premium-card">
+  <section class="section-home section-delivery-premium" aria-labelledby="page-title">
+    <div class="section-home-inner">
+      <p class="delivery-premium-kicker">Antes de comprar</p>
+      <h1 id="page-title" class="section-heading-home">Preguntas frecuentes</h1>
+      <p class="section-lead-home">Respuestas claras para que sepas exactamente qué recibes, cómo llega y qué debes revisar antes de pagar.</p>
 
-<h1 class="page-title">Preguntas frecuentes</h1>
-<p class="page-text">
-Todo lo relacionado con entrega, formato digital y personalización.
-</p>
+      <div class="delivery-details-grid">
+        <article class="delivery-detail-card">
+          <span class="delivery-detail-icon" aria-hidden="true">✦</span>
+          <h3>¿Es físico o digital?</h3>
+          <p>Por ahora es un producto digital en PDF. No incluye libro físico ni envío postal.</p>
+        </article>
+        <article class="delivery-detail-card">
+          <span class="delivery-detail-icon" aria-hidden="true">☾</span>
+          <h3>¿Cuándo lo recibo?</h3>
+          <p>La entrega estimada es de 24 a 48 horas al correo indicado en el pedido.</p>
+        </article>
+        <article class="delivery-detail-card">
+          <span class="delivery-detail-icon" aria-hidden="true">✧</span>
+          <h3>¿Cómo llega?</h3>
+          <p>Recibirás un enlace directo de descarga por email. Revisa también spam o promociones.</p>
+        </article>
+        <article class="delivery-detail-card">
+          <span class="delivery-detail-icon" aria-hidden="true">◆</span>
+          <h3>¿Hay devoluciones?</h3>
+          <p>Al ser personalizado, no se aceptan devoluciones una vez iniciado el proceso de creación.</p>
+        </article>
+        <article class="delivery-detail-card">
+          <span class="delivery-detail-icon" aria-hidden="true">♡</span>
+          <h3>¿Puedo regalarlo?</h3>
+          <p>Sí. Solo debes colocar los datos de la persona para quien deseas crear el mapa.</p>
+        </article>
+      </div>
 
-</section>
+      <div class="hero-cta mt-4">
+        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Quiero mi Mapa del Alma</a>
+        <a class="btn-outline" href="{{ url_for('main.index') }}">Volver al inicio</a>
+      </div>
+    </div>
+  </section>
 {% endblock %}

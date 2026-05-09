@@ -1,11 +1,39 @@
 {% extends "base.html" %}
+{% block title %}Qué es el Mapa del Alma · {{ t('site.name') }}{% endblock %}
 {% block content %}
-<section class="premium-card">
+  <section class="section-home section-delivery-premium" aria-labelledby="page-title">
+    <div class="section-home-inner">
+      <p class="delivery-premium-kicker">Una lectura íntima y simbólica</p>
+      <h1 id="page-title" class="section-heading-home">Qué es el Mapa del Alma</h1>
+      <p class="section-lead-home">No es una lectura rápida ni una plantilla. Es una pieza digital personalizada que une nombre, apellidos, energía, símbolos y lenguaje emocional para crear una experiencia de reconocimiento.</p>
 
-<h1 class="page-title">Qué es el Mapa del Alma</h1>
-<p class="page-text">
-Una experiencia emocional premium creada para revelar la energía simbólica de tu nombre.
-</p>
+      <div class="delivery-details-grid">
+        <article class="delivery-detail-card">
+          <span class="delivery-detail-icon" aria-hidden="true">✦</span>
+          <h3>Creado con tus datos</h3>
+          <p>El contenido se genera con la información del pedido para construir una lectura única y coherente.</p>
+        </article>
+        <article class="delivery-detail-card">
+          <span class="delivery-detail-icon" aria-hidden="true">☾</span>
+          <h3>Diseñado para sentirse personal</h3>
+          <p>La intención no es llenar páginas: es crear una experiencia que la persona quiera releer con calma.</p>
+        </article>
+        <article class="delivery-detail-card">
+          <span class="delivery-detail-icon" aria-hidden="true">✧</span>
+          <h3>Una pieza digital premium</h3>
+          <p>Se entrega como PDF personalizado, con diseño editorial y estética celestial azul profunda.</p>
+        </article>
+        <article class="delivery-detail-card">
+          <span class="delivery-detail-icon" aria-hidden="true">♡</span>
+          <h3>Para volver a ti</h3>
+          <p>El mapa busca que la persona se vea con más claridad, ternura y conciencia de su propio camino.</p>
+        </article>
+      </div>
 
-</section>
+      <div class="hero-cta mt-4">
+        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Quiero mi Mapa del Alma</a>
+        <a class="btn-outline" href="{{ url_for('main.index') }}">Volver al inicio</a>
+      </div>
+    </div>
+  </section>
 {% endblock %}

@@ -1,11 +1,29 @@
 {% extends "base.html" %}
+{% block title %}Vista previa · {{ t('site.name') }}{% endblock %}
 {% block content %}
-<section class="premium-card">
+  <section class="section-home section-editorial-gallery" aria-labelledby="preview-title">
+    <div class="section-home-inner section-home-inner-wide">
+      <p class="delivery-premium-kicker">Vista interior</p>
+      <h1 id="preview-title" class="section-heading-home">Mira cómo se siente por dentro</h1>
+      <p class="section-lead-home">
+        Una experiencia visual cuidada, con páginas diseñadas para leerse con calma y conservarse como una pieza personal.
+      </p>
 
-<h1 class="page-title">Vista previa</h1>
-<p class="page-text">
-Aquí podrás mostrar previews grandes y elegantes del PDF.
-</p>
+      <div class="editorial-gallery-grid">
+        <figure class="editorial-gallery-main">
+          <img src="{{ url_for('static', filename='img/hero_mockup_principal.png') }}" alt="Vista previa del Mapa del Alma" loading="lazy" decoding="async">
+          <figcaption>Presentación premium del Mapa del Alma</figcaption>
+        </figure>
+        <figure>
+          <img src="{{ url_for('static', filename='img/hero_mockup_vertical.png') }}" alt="Mockup vertical del PDF" loading="lazy" decoding="async">
+          <figcaption>Diseño digital personalizado</figcaption>
+        </figure>
+      </div>
 
-</section>
+      <div class="hero-cta mt-4">
+        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Crear mi Mapa</a>
+        <a class="btn-outline" href="{{ url_for('main.incluye') }}">Ver qué incluye</a>
+      </div>
+    </div>
+  </section>
 {% endblock %}

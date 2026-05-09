@@ -350,21 +350,8 @@ def preguntas():
 
 @bp.route("/resenas")
 def resenas_page():
-    """Página pública de reseñas aprobadas."""
     reales_rows = database.list_resenas_aprobadas_todas()
-    resenas_reales: list[dict] = []
-    for r in reales_rows:
-        resenas_reales.append(dict(r))
-
-    resenas_carousel_slides: list[list[dict]] = []
-    chunk: list[dict] = []
-    for r in resenas_reales:
-        chunk.append(r)
-        if len(chunk) == 4:
-            resenas_carousel_slides.append(chunk)
-            chunk = []
-    if chunk:
-        resenas_carousel_slides.append(chunk)
+    resenas_reales = [dict(r) for r in reales_rows]
 
     resenas_resumen = None
     total_count, avg = database.resumen_resenas_aprobadas()
@@ -389,7 +376,6 @@ def resenas_page():
         "resenas.html",
         resenas_aprobadas=resenas_reales,
         resenas_resumen=resenas_resumen,
-        resenas_carousel_slides=resenas_carousel_slides,
     )
 
 

@@ -70,24 +70,17 @@
         </a>
 
         <nav class="nav-links" aria-label="Principal">
-          <a href="{{ url_for('main.index') }}">{{ t('nav.home') }}</a>
-          <a href="{{ url_for('main.index') }}#resenas">{{ t('nav.reviews') }}</a>
-          <a class="btn-nav" href="{{ url_for('main.pedido') }}">{{ t('nav.cta') }}</a>
+          <a href="{{ url_for('main.index') }}">Inicio</a>
+          <a href="{{ url_for('main.que_es') }}">Qué es</a>
+          <a href="{{ url_for('main.vista_previa') }}">Vista previa</a>
+          <a href="{{ url_for('main.incluye') }}">Qué incluye</a>
+          <a href="{{ url_for('main.resenas_page') }}">Reseñas</a>
+          <a href="{{ url_for('main.preguntas') }}">Preguntas frecuentes</a>
+          <a class="btn-nav" href="{{ url_for('main.pedido') }}">Comprar</a>
         </nav>
       </div>
     </header>
-
-    <nav class="premium-subnav" aria-label="Accesos rápidos">
-      <a href="{{ url_for('main.index') }}">⌂ Inicio</a>
-      <a href="{{ url_for('main.index') }}#promesa">✦ ¿Qué es?</a>
-      <a href="{{ url_for('main.index') }}#titulo-incluye">🎁 Incluye</a>
-      <a href="{{ url_for('main.index') }}#resenas">💬 Reseñas</a>
-      <a href="{{ url_for('main.index') }}#faq">❔ Preguntas</a>
-      <a class="premium-subnav-cta" href="{{ url_for('main.pedido') }}">✨ Quiero mi Mapa del Alma</a>
-    </nav>
-
-
-    <div class="news-ticker" aria-label="{{ t('ticker.top') }}">
+<div class="news-ticker" aria-label="{{ t('ticker.top') }}">
       <div class="news-ticker-track">
         <div class="news-ticker-segment">
           <span>✨ {{ t('ticker.top') }} ·</span>
