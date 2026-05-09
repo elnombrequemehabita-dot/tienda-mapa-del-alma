@@ -1762,3 +1762,92 @@ body {
     grid-column: 1 / -1;
   }
 }
+
+/* =========================================================
+   FIX V3 — navegación móvil premium tipo chips
+   ========================================================= */
+
+@media (max-width: 991px) {
+  .site-nav {
+    position: sticky;
+    top: 0;
+  }
+
+  .site-nav .inner {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: .55rem;
+    padding: .55rem .7rem .5rem;
+  }
+
+  .brand-with-logo {
+    justify-content: center;
+    max-width: 100% !important;
+  }
+
+  .brand-logo {
+    height: 2.45rem !important;
+    max-width: 3.2rem !important;
+  }
+
+  .brand-text {
+    font-size: clamp(1.05rem, 5vw, 1.28rem) !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: calc(100vw - 5.2rem);
+  }
+
+  .nav-links {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: .45rem !important;
+    padding: .12rem .1rem .42rem;
+    justify-content: flex-start !important;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .nav-links::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-links a,
+  .nav-links .btn-nav {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    scroll-snap-align: start;
+    font-size: .78rem !important;
+    line-height: 1 !important;
+    padding: .54rem .74rem !important;
+    border-radius: 999px !important;
+    min-height: 2.15rem;
+  }
+
+  .nav-links a span,
+  .nav-links .btn-nav span {
+    font-size: .86em;
+  }
+
+  main {
+    padding-top: .55rem !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .nav-links a,
+  .nav-links .btn-nav {
+    font-size: .74rem !important;
+    padding: .5rem .62rem !important;
+  }
+
+  .brand-text {
+    font-size: 1.05rem !important;
+  }
+}
