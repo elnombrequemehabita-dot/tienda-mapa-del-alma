@@ -622,8 +622,8 @@ def _resolver_pedido_desde_session_id(stripe_session_id: str) -> Optional[int]:
 def _codigo_publico_pedido(pedido_id: int) -> str:
     """
     Código público premium para el cliente.
-    No revela que el pedido interno sea #1, #2, etc.
-    Es estable: el mismo pedido siempre muestra el mismo código.
+    No muestra el ID interno real del pedido (#1, #2, etc.).
+    El mismo pedido siempre devuelve el mismo código.
     """
     pid = int(pedido_id)
     codigo = ((pid * 7919) + 482731) % 900000 + 100000
@@ -633,7 +633,7 @@ def _codigo_publico_pedido(pedido_id: int) -> str:
 def _codigo_confirmacion_visible(pedido_id: Optional[int], stripe_session_id: str) -> str:
     """
     Código visible para la pantalla de gracias.
-    Importante: no muestra el ID interno real del pedido.
+    Importante: no revela el ID interno del pedido.
     """
     if pedido_id:
         return _codigo_publico_pedido(int(pedido_id))

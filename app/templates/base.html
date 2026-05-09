@@ -70,27 +70,13 @@
         </a>
 
         <nav class="nav-links" aria-label="Principal">
-          <a class="nav-item {% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}">
-            <span aria-hidden="true">✦</span> Inicio
-          </a>
-          <a class="nav-item {% if request.endpoint == 'main.que_es' %}active{% endif %}" href="{{ url_for('main.que_es') }}">
-            <span aria-hidden="true">☾</span> Qué es
-          </a>
-          <a class="nav-item {% if request.endpoint == 'main.vista_previa' %}active{% endif %}" href="{{ url_for('main.vista_previa') }}">
-            <span aria-hidden="true">✧</span> Vista previa
-          </a>
-          <a class="nav-item {% if request.endpoint == 'main.incluye' %}active{% endif %}" href="{{ url_for('main.incluye') }}">
-            <span aria-hidden="true">❖</span> Qué incluye
-          </a>
-          <a class="nav-item {% if request.endpoint == 'main.resenas_page' %}active{% endif %}" href="{{ url_for('main.resenas_page') }}">
-            <span aria-hidden="true">♡</span> Reseñas
-          </a>
-          <a class="nav-item {% if request.endpoint == 'main.preguntas' %}active{% endif %}" href="{{ url_for('main.preguntas') }}">
-            <span aria-hidden="true">?</span> Preguntas frecuentes
-          </a>
-          <a class="btn-nav {% if request.endpoint == 'main.pedido' %}active{% endif %}" href="{{ url_for('main.pedido') }}">
-            <span aria-hidden="true">✨</span> Comprar
-          </a>
+          <a class="{% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}">✦ Inicio</a>
+          <a class="{% if request.endpoint == 'main.que_es' %}active{% endif %}" href="{{ url_for('main.que_es') }}">☾ Qué es</a>
+          <a class="{% if request.endpoint == 'main.vista_previa' %}active{% endif %}" href="{{ url_for('main.vista_previa') }}">✧ Vista previa</a>
+          <a class="{% if request.endpoint == 'main.incluye' %}active{% endif %}" href="{{ url_for('main.incluye') }}">❖ Qué incluye</a>
+          <a class="{% if request.endpoint == 'main.resenas_page' %}active{% endif %}" href="{{ url_for('main.resenas_page') }}">♡ Reseñas</a>
+          <a class="{% if request.endpoint == 'main.preguntas' %}active{% endif %}" href="{{ url_for('main.preguntas') }}">? Preguntas frecuentes</a>
+          <a class="btn-nav {% if request.endpoint == 'main.pedido' %}active{% endif %}" href="{{ url_for('main.pedido') }}">✨ Comprar</a>
         </nav>
       </div>
     </header>

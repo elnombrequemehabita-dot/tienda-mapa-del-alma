@@ -1,9 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Vista previa · {{ t('site.name') }}{% endblock %}
 {% block content %}
-  <section class="section-home section-editorial-gallery premium-page-shell" aria-labelledby="preview-title">
-    <div class="premium-sticker premium-sticker--one" aria-hidden="true">✧</div>
-    <div class="premium-sticker premium-sticker--two" aria-hidden="true">☾</div>
+  <section class="section-home section-pdf section-editorial-gallery" aria-labelledby="preview-title">
     <div class="section-home-inner section-home-inner-wide">
       <p class="delivery-premium-kicker">Vista interior</p>
       <h1 id="preview-title" class="section-heading-home">Mira cómo se siente por dentro</h1>
@@ -11,28 +9,27 @@
         Una experiencia visual cuidada, con páginas diseñadas para leerse con calma y conservarse como una pieza personal.
       </p>
 
-      <div class="editorial-gallery-grid">
+      <div class="editorial-gallery-grid" aria-label="Galería premium del Mapa del Alma">
         <figure class="editorial-gallery-main">
-          <img src="{{ url_for('static', filename='img/hero_mockup_principal.png') }}" alt="Vista previa del Mapa del Alma" loading="lazy" decoding="async">
-          <figcaption>Presentación premium del Mapa del Alma</figcaption>
+          <img src="{{ url_for('static', filename='img/hero_mockup_principal.png') }}" alt="Mockup principal del Mapa del Alma" loading="lazy" decoding="async" />
+          <figcaption>Experiencia digital con sensación editorial</figcaption>
         </figure>
         <figure>
-          <img src="{{ url_for('static', filename='img/hero_mockup_vertical.png') }}" alt="Mockup vertical del PDF" loading="lazy" decoding="async">
-          <figcaption>Diseño digital personalizado</figcaption>
+          <img src="{{ url_for('static', filename='img/preview_interior_1.jpeg') }}" alt="Página interior premium 1" loading="lazy" decoding="async" />
+          <figcaption>Página interior premium</figcaption>
         </figure>
-      </div>
-
-      <div class="delivery-details-grid mt-4">
-        <article class="delivery-detail-card">
-          <span class="delivery-detail-icon" aria-hidden="true">✦</span>
-          <h3>Diseño editorial</h3>
-          <p>Páginas con atmósfera profunda, textos cuidados y lectura visualmente agradable.</p>
-        </article>
-        <article class="delivery-detail-card">
-          <span class="delivery-detail-icon" aria-hidden="true">☾</span>
-          <h3>PDF digital</h3>
-          <p>Recibirás tu mapa por email mediante un link directo de descarga.</p>
-        </article>
+        <figure>
+          <img src="{{ url_for('static', filename='img/preview_interior_2.jpeg') }}" alt="Página interior premium 2" loading="lazy" decoding="async" />
+          <figcaption>Lectura simbólica personalizada</figcaption>
+        </figure>
+        <figure>
+          <img src="{{ url_for('static', filename='img/preview_interior_3.jpeg') }}" alt="Página interior premium 3" loading="lazy" decoding="async" />
+          <figcaption>Diseño editorial celestial</figcaption>
+        </figure>
+        <figure>
+          <img src="{{ url_for('static', filename='img/hero_mockup_vertical.png') }}" alt="Portada vertical del Mapa del Alma" loading="lazy" decoding="async" />
+          <figcaption>Portada digital personalizada</figcaption>
+        </figure>
       </div>
 
       <div class="hero-cta mt-4">
