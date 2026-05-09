@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from flask import current_app
 
+from app import db as database
 from app.db import get_db
 from app.pdf_generator import generar_pdf_desde_tienda
 
@@ -44,7 +45,7 @@ ESTADO_PAGADO = "pagado"
 ESTADO_GENERANDO_PDF = "generando_pdf"
 ESTADO_PDF_GENERADO = "pdf_generado"
 ESTADO_COMPLETADO = "completado"
-ESTADO_ERROR = "error"
+ESTADO_ERROR = "error_generacion"
 
 DRIVE_EXPIRACION_HORAS = 72
 
@@ -81,30 +82,21 @@ def _parse_datetime(value: Any) -> Optional[datetime]:
 
 
 def _db_placeholder() -> str:
-    database_url = str(current_app.config.get("DATABASE_URL", "") or "")
-    if database_url.startswith("postgres"):
-        return "%s"
+    # El proyecto escribe SQL interno con ?. app.db.execute convierte ? -> %s
+    # automáticamente cuando DATABASE_URL apunta a PostgreSQL.
     return "?"
 
 
-def _execute(db, sql: str, params: tuple = ()):
-    cur = db.cursor()
-    cur.execute(sql, params)
-    return cur
+def _execute(db, sql: str, params: tuple = ()):  # db se conserva por compatibilidad interna
+    return database.execute(sql, params)
 
 
-def _commit(db):
-    try:
-        db.commit()
-    except Exception:
-        pass
+def _commit(db):  # db se conserva por compatibilidad interna
+    database.commit()
 
 
-def _rollback(db):
-    try:
-        db.rollback()
-    except Exception:
-        pass
+def _rollback(db):  # db se conserva por compatibilidad interna
+    database.rollback()
 
 
 def _fetchone_dict(cursor) -> Optional[Dict[str, Any]]:
@@ -134,43 +126,83 @@ def _fetchall_dict(cursor) -> List[Dict[str, Any]]:
     return result
 
 
-def _column_exists(db, table: str, column: str) -> bool:
+def _row_to_dict(row: Any) -> Dict[str, Any]:
     try:
+        return dict(row)
+    except Exception:
+        return {k: row[k] for k in row.keys()}
+
+
+def _column_exists(db, table: str, column: str) -> bool:
+    """
+    Compatibilidad defensiva para SQLite/PostgreSQL.
+    Se mantiene por si alguna ruta antigua llama esta función, pero las
+    actualizaciones nuevas pasan por app.db.update_pedido_campos().
+    """
+    try:
+        if str(type(db)).lower().find("psycopg2") >= 0:
+            cur = database.execute(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = ? AND column_name = ?
+                LIMIT 1
+                """,
+                (table, column),
+            )
+            return cur.fetchone() is not None
+
         cur = db.cursor()
         cur.execute(f"PRAGMA table_info({table})")
-        cols = [r[1] for r in cur.fetchall()]
+        cols = []
+        for r in cur.fetchall():
+            try:
+                cols.append(r["name"])
+            except Exception:
+                cols.append(r[1])
         return column in cols
     except Exception:
-        return True
+        logger.debug("No se pudo verificar columna %s.%s", table, column, exc_info=True)
+        return False
 
 
 def _safe_update_pedido(order_id: int, campos: Dict[str, Any]) -> None:
+    """
+    Actualiza pedidos usando app.db como única capa oficial.
+
+    Conserva compatibilidad con nombres antiguos que aparecían en este módulo:
+    - updated_at / actualizado_en: app.db ya actualiza actualizado_en automáticamente.
+    - error_message: se guarda como error.
+    - pdf_url: se guarda como drive_download_link, que es la columna real actual.
+    - drive_expires_at: se ignora si la columna no existe en db.py actual.
+    """
     if not campos:
         return
 
-    db = get_db()
-    ph = _db_placeholder()
+    normalizados: Dict[str, Any] = {}
+    clear_error = False
 
-    campos_validos = {}
     for col, val in campos.items():
-        if _column_exists(db, "pedidos", col):
-            campos_validos[col] = val
+        if col in {"updated_at", "actualizado_en", "drive_expires_at"}:
+            continue
+        if col == "error_message":
+            col = "error"
+        elif col == "pdf_url":
+            col = "drive_download_link"
+        elif col == "download_link":
+            col = "drive_download_link"
 
-    if not campos_validos:
-        logger.warning("No hay columnas válidas para actualizar pedido #%s", order_id)
+        if col == "error" and val is None:
+            clear_error = True
+            continue
+
+        normalizados[col] = val
+
+    if not normalizados and not clear_error:
+        logger.debug("No hay campos reales para actualizar pedido #%s", order_id)
         return
 
-    sets = ", ".join([f"{col} = {ph}" for col in campos_validos.keys()])
-    values = tuple(campos_validos.values()) + (order_id,)
-
-    sql = f"""
-        UPDATE pedidos
-        SET {sets}
-        WHERE id = {ph}
-    """
-
-    _execute(db, sql, values)
-    _commit(db)
+    database.update_pedido_campos(int(order_id), clear_error=clear_error, **normalizados)
 
 
 def _project_root() -> Path:
@@ -182,31 +214,25 @@ def _project_root() -> Path:
 # =========================================================
 
 def obtener_pedido(order_id: int) -> Optional[Dict[str, Any]]:
-    db = get_db()
-    ph = _db_placeholder()
-
-    cur = _execute(
-        db,
-        f"SELECT * FROM pedidos WHERE id = {ph}",
-        (order_id,),
-    )
-
-    return _fetchone_dict(cur)
+    row = database.get_pedido_by_id(int(order_id))
+    if row is None:
+        return None
+    pedido = _row_to_dict(row)
+    # Alias de lectura para funciones antiguas que esperaban pdf_url.
+    if not pedido.get("pdf_url"):
+        pedido["pdf_url"] = (
+            pedido.get("drive_download_link")
+            or pedido.get("drive_view_link")
+        )
+    return pedido
 
 
 def marcar_estado(order_id: int, estado: str, error: Optional[str] = None) -> None:
-    campos = {
-        "estado": estado,
-        "updated_at": _iso(_utc_now()),
-    }
-
-    if error:
-        if _column_exists(get_db(), "pedidos", "error_message"):
-            campos["error_message"] = str(error)
-        elif _column_exists(get_db(), "pedidos", "error"):
-            campos["error"] = str(error)
-
-    _safe_update_pedido(order_id, campos)
+    database.update_estado_pedido(
+        int(order_id),
+        estado,
+        error=str(error) if error else None,
+    )
 
 
 def marcar_pedido_pagado(order_id: int) -> None:
@@ -523,7 +549,11 @@ def _pdf_local_existente(pedido: Dict[str, Any], order_id: int) -> Optional[Path
 
 def _drive_link_vigente(pedido: Dict[str, Any]) -> bool:
     drive_file_id = pedido.get("drive_file_id")
-    pdf_url = pedido.get("pdf_url")
+    pdf_url = (
+        pedido.get("pdf_url")
+        or pedido.get("drive_download_link")
+        or pedido.get("drive_view_link")
+    )
     expires_at = _parse_datetime(pedido.get("drive_expires_at"))
 
     if not drive_file_id or not pdf_url or not expires_at:
@@ -549,10 +579,10 @@ def _guardar_drive_en_db(order_id: int, pdf_path: Path, drive_result: Optional[D
         {
             "estado": ESTADO_PDF_GENERADO,
             "pdf_path": str(pdf_path),
-            "pdf_url": pdf_url,
             "drive_file_id": drive_file_id,
+            "drive_view_link": drive_result.get("view_link") if drive_result else pdf_url,
+            "drive_download_link": pdf_url,
             "drive_expires_at": drive_expires_at,
-            "updated_at": _iso(_utc_now()),
         },
     )
 
@@ -821,7 +851,6 @@ def procesar_post_pago(order_id: int) -> Dict[str, Any]:
             order_id,
             {
                 "estado": ESTADO_COMPLETADO,
-                "updated_at": _iso(_utc_now()),
             },
         )
 
@@ -893,10 +922,10 @@ def regenerar_pdf_pedido(order_id: int, forzar_openai: bool = False) -> Dict[str
         order_id,
         {
             "drive_file_id": None,
-            "pdf_url": None,
+            "drive_view_link": None,
+            "drive_download_link": None,
             "drive_expires_at": None,
             "estado": ESTADO_PAGADO,
-            "updated_at": _iso(_utc_now()),
         },
     )
 
@@ -908,38 +937,18 @@ def regenerar_pdf_pedido(order_id: int, forzar_openai: bool = False) -> Dict[str
 # =========================================================
 
 def detectar_pedidos_atascados(minutos: int = 30) -> List[Dict[str, Any]]:
-    db = get_db()
-    ph = _db_placeholder()
-
     limite = _utc_now() - timedelta(minutes=minutos)
     limite_iso = _iso(limite)
 
     try:
-        cur = _execute(
-            db,
-            f"""
-            SELECT *
-            FROM pedidos
-            WHERE estado = {ph}
-              AND (
-                    updated_at IS NULL
-                    OR updated_at < {ph}
-                  )
-            ORDER BY id DESC
-            """,
-            (
-                ESTADO_GENERANDO_PDF,
-                limite_iso,
-            ),
+        rows = database.pedidos_atascados_en_estado(
+            [ESTADO_GENERANDO_PDF],
+            antes_de_iso=limite_iso,
+            limit=100,
         )
+        pedidos = [_row_to_dict(row) for row in rows]
 
-        pedidos = _fetchall_dict(cur)
-
-        logger.info(
-            "Pedidos atascados detectados: %s",
-            len(pedidos),
-        )
-
+        logger.info("Pedidos atascados detectados: %s", len(pedidos))
         return pedidos
 
     except Exception:
