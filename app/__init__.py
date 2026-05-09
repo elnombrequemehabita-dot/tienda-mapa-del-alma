@@ -14,6 +14,49 @@ def _bool_env(name: str, default: bool = False) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on", "si", "sí"}
 
 
+_TRANSLATIONS = {
+    "footer.product": "Mapa del Alma – El Nombre Que Me Habita",
+    "footer.rights": "Todos los derechos reservados.",
+    "footer.privacy": "Privacidad",
+    "footer.terms": "Condiciones",
+    "footer.contact": "Contacto",
+    "nav.home": "Inicio",
+    "nav.order": "Crear mi Mapa",
+    "nav.contact": "Contacto",
+    "product.name": "Mapa del Alma",
+    "site.name": "El Nombre Que Me Habita",
+}
+
+
+def _install_template_helpers(app: Flask) -> None:
+    """
+    Registra helpers globales para Jinja.
+
+    Muchos templates usan:
+        {{ t('footer.product') }}
+
+    Si no registramos `t`, Flask lanza:
+        jinja2.exceptions.UndefinedError: 't' is undefined
+    """
+
+    def t(key: str, default: str | None = None) -> str:
+        if key is None:
+            return ""
+        key_str = str(key)
+        return _TRANSLATIONS.get(key_str, default if default is not None else key_str)
+
+    app.jinja_env.globals["t"] = t
+
+    @app.context_processor
+    def inject_template_helpers():
+        return {
+            "t": t,
+            "site_name": "El Nombre Que Me Habita",
+            "product_name": "Mapa del Alma",
+            "public_base_url": app.config.get("PUBLIC_BASE_URL", ""),
+        }
+
+
 def create_app():
     logger.info("Creando la app Flask...")
 
@@ -66,6 +109,8 @@ def create_app():
         os.makedirs(app.instance_path, exist_ok=True)
     except Exception:
         logger.exception("No se pudo crear instance_path.")
+
+    _install_template_helpers(app)
 
     # MUY IMPORTANTE:
     # No ejecutar init_db() aquí. La base de datos se inicializa diferida
