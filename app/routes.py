@@ -571,7 +571,7 @@ def _sincronizar_post_pago_desde_return_stripe(pedido_id: int, stripe_session_id
         return
 
     try:
-        procesar_post_pago(pedido_id, stripe_checkout_session_id=stripe_session_id)
+        procesar_post_pago(pedido_id)
     except Exception as exc:  # noqa: BLE001
         logger.error("Error en post-pago desde return_url: %s", exc)
         flash(
@@ -618,21 +618,31 @@ def _resolver_pedido_desde_session_id(stripe_session_id: str) -> Optional[int]:
     return _resolve_pedido_id_from_checkout_session(data)
 
 
+
+def _codigo_publico_pedido(pedido_id: int) -> str:
+    """
+    Código público premium para el cliente.
+    No revela que el pedido interno sea #1, #2, etc.
+    Es estable: el mismo pedido siempre muestra el mismo código.
+    """
+    pid = int(pedido_id)
+    codigo = ((pid * 7919) + 482731) % 900000 + 100000
+    return f"El Nombre Que Me Habita pedido número ALMA-{codigo}"
+
+
 def _codigo_confirmacion_visible(pedido_id: Optional[int], stripe_session_id: str) -> str:
     """
-    Devuelve siempre un código visible para la pantalla de gracias.
-    - Si existe pedido_id: código oficial.
-    - Si no: código provisional derivado de session_id.
-    - Último fallback: código temporal.
+    Código visible para la pantalla de gracias.
+    Importante: no muestra el ID interno real del pedido.
     """
     if pedido_id:
-        return database.codigo_confirmacion_pedido(pedido_id)
+        return _codigo_publico_pedido(int(pedido_id))
 
     token = "".join(ch for ch in str(stripe_session_id).upper() if ch.isalnum())
     if token:
-        return f"MAPA-CHK-{token[-8:]}"
+        return f"El Nombre Que Me Habita pedido número ALMA-{token[-8:]}"
 
-    return f"MAPA-PEND-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+    return f"El Nombre Que Me Habita pedido número ALMA-{datetime.utcnow().strftime('%H%M%S')}"
 
 
 @bp.route("/gracias")
@@ -782,10 +792,7 @@ def stripe_webhook():
         pedido_id = _resolve_pedido_id_from_checkout_session(session_data)
         if pedido_id is None:
             return "", 200
-        procesar_post_pago(
-            pedido_id,
-            stripe_checkout_session_id=session_data.get("id"),
-        )
+        procesar_post_pago(pedido_id)
     except Exception as exc:  # noqa: BLE001
         logger.error("Webhook Stripe error en post-pago: %s", exc)
 
