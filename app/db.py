@@ -426,6 +426,14 @@ def update_pedido_campos(
     clear_error: bool = False,
     **campos: Any,
 ) -> int:
+    """
+    Actualiza campos permitidos de un pedido.
+
+    Corrección importante:
+    - Si clear_error=True, NO se debe añadir también "error = ?" porque
+      PostgreSQL rechaza "multiple assignments to same column".
+    - Esto evita fallos en el flujo post-pago al marcar estados sin error.
+    """
     allowed = {
         "nombre",
         "apellidos",
@@ -446,14 +454,26 @@ def update_pedido_campos(
 
     updates: list[str] = []
     values: list[Any] = []
+    assigned: set[str] = set()
 
     for key, value in campos.items():
-        if key in allowed:
-            updates.append(f"{key} = ?")
-            values.append(value)
+        if key not in allowed:
+            continue
 
-    if clear_error:
+        # Si se pide limpiar el error, evitamos asignarlo dos veces.
+        if key == "error" and clear_error:
+            continue
+
+        if key in assigned:
+            continue
+
+        updates.append(f"{key} = ?")
+        values.append(value)
+        assigned.add(key)
+
+    if clear_error and "error" not in assigned:
         updates.append("error = NULL")
+        assigned.add("error")
 
     updates.append("actualizado_en = CURRENT_TIMESTAMP")
 
@@ -470,11 +490,16 @@ def update_pedido_campos(
 
 
 def update_estado_pedido(pedido_id: int, estado: str, error: Optional[str] = None) -> int:
+    campos: dict[str, Any] = {"estado": estado}
+    clear_error = error is None
+
+    if error is not None:
+        campos["error"] = error
+
     return update_pedido_campos(
         pedido_id,
-        estado=estado,
-        error=error,
-        clear_error=(error is None),
+        clear_error=clear_error,
+        **campos,
     )
 
 
@@ -520,7 +545,13 @@ def delete_pedido(pedido_id: int) -> int:
 
 
 def codigo_confirmacion_pedido(pedido_id: int) -> str:
-    return f"MAPA-{int(pedido_id):06d}"
+    """
+    Código público de confirmación.
+
+    No expone el ID interno real del pedido.
+    """
+    numero = (int(pedido_id) * 9301 + 49297) % 900000 + 100000
+    return f"ALMA-{numero:06d}"
 
 
 # ============================================================
