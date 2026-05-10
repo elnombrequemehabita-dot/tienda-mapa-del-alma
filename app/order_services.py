@@ -23,14 +23,10 @@ try:
     from app.email_service import (
         enviar_email_pedido_completado,
         enviar_email_admin_error,
-        notify_admin_pago_confirmado,
-        notify_customer_pago_confirmado,
     )
 except Exception:
     enviar_email_pedido_completado = None
     enviar_email_admin_error = None
-    notify_admin_pago_confirmado = None
-    notify_customer_pago_confirmado = None
 
 try:
     from app.google_drive_oauth import (
@@ -50,9 +46,56 @@ ESTADO_GENERANDO_PDF = "generando_pdf"
 ESTADO_PDF_GENERADO = "pdf_generado"
 ESTADO_COMPLETADO = "completado"
 ESTADO_ERROR = "error_generacion"
-ESTADO_ERROR_ENVIO = "error_envio"
 
 DRIVE_EXPIRACION_HORAS = 72
+
+
+# =========================================================
+# VALIDACION FUERTE DE JSON OPENAI PARA PRODUCCION
+# =========================================================
+
+SECCIONES_OPENAI_OBLIGATORIAS = [
+    "mensaje_alma",
+    "origen_nombre",
+    "linaje_apellidos",
+    "esencia",
+    "energia",
+    "zodiaco",
+    "zodiaco_chino",
+    "numerologia",
+    "animal_espiritual",
+    "angel_guardian",
+    "piedra_energetica",
+    "dones",
+    "sombras",
+    "herida",
+    "proposito",
+    "amor_vinculos",
+    "dinero_camino",
+    "ritual_personalizado",
+    "afirmaciones",
+    "mensaje_final",
+    "esencia_alma",
+]
+
+CAMPOS_OPENAI_OBLIGATORIOS = [
+    "primera_lectura",
+    "profundizacion",
+    "integracion",
+]
+
+PREFIJOS_JSON_NO_FINALES = (
+    "PARCIAL_",
+    "RESCATE_",
+    "OK_SECCION_",
+    "ERROR_GLOBAL_",
+)
+
+TIPOS_JSON_NO_FINALES = (
+    "parcial",
+    "rescate",
+    "error",
+)
 
 
 # =========================================================
@@ -87,19 +130,20 @@ def _parse_datetime(value: Any) -> Optional[datetime]:
 
 
 def _db_placeholder() -> str:
-    # El código interno usa ?. app.db convierte ? -> %s en PostgreSQL.
+    # El proyecto escribe SQL interno con ?. app.db.execute convierte ? -> %s
+    # automáticamente cuando DATABASE_URL apunta a PostgreSQL.
     return "?"
 
 
-def _execute(db, sql: str, params: tuple = ()):  # db se conserva por compatibilidad
+def _execute(db, sql: str, params: tuple = ()):  # db se conserva por compatibilidad interna
     return database.execute(sql, params)
 
 
-def _commit(db):  # db se conserva por compatibilidad
+def _commit(db):  # db se conserva por compatibilidad interna
     database.commit()
 
 
-def _rollback(db):  # db se conserva por compatibilidad
+def _rollback(db):  # db se conserva por compatibilidad interna
     database.rollback()
 
 
@@ -130,26 +174,32 @@ def _fetchall_dict(cursor) -> List[Dict[str, Any]]:
     return result
 
 
+def _row_to_dict(row: Any) -> Dict[str, Any]:
+    try:
+        return dict(row)
+    except Exception:
+        return {k: row[k] for k in row.keys()}
+
+
 def _column_exists(db, table: str, column: str) -> bool:
     """
-    Compatibilidad defensiva. Las actualizaciones reales pasan por app.db.
+    Compatibilidad defensiva para SQLite/PostgreSQL.
+    Se mantiene por si alguna ruta antigua llama esta función, pero las
+    actualizaciones nuevas pasan por app.db.update_pedido_campos().
     """
     try:
-        cur = database.execute(
-            """
-            SELECT 1
-            FROM information_schema.columns
-            WHERE table_name = ? AND column_name = ?
-            LIMIT 1
-            """,
-            (table, column),
-        )
-        if cur.fetchone() is not None:
-            return True
-    except Exception:
-        pass
+        if str(type(db)).lower().find("psycopg2") >= 0:
+            cur = database.execute(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = ? AND column_name = ?
+                LIMIT 1
+                """,
+                (table, column),
+            )
+            return cur.fetchone() is not None
 
-    try:
         cur = db.cursor()
         cur.execute(f"PRAGMA table_info({table})")
         cols = []
@@ -160,18 +210,19 @@ def _column_exists(db, table: str, column: str) -> bool:
                 cols.append(r[1])
         return column in cols
     except Exception:
+        logger.debug("No se pudo verificar columna %s.%s", table, column, exc_info=True)
         return False
 
 
 def _safe_update_pedido(order_id: int, campos: Dict[str, Any]) -> None:
     """
-    Actualiza pedidos usando app.db como capa oficial.
+    Actualiza pedidos usando app.db como única capa oficial.
 
-    Mapea nombres antiguos:
-    - updated_at / actualizado_en se ignoran porque app.db actualiza actualizado_en.
-    - pdf_url / download_link se guardan como drive_download_link.
-    - error_message se guarda como error.
-    - drive_expires_at se ignora si la base actual no tiene esa columna.
+    Conserva compatibilidad con nombres antiguos que aparecían en este módulo:
+    - updated_at / actualizado_en: app.db ya actualiza actualizado_en automáticamente.
+    - error_message: se guarda como error.
+    - pdf_url: se guarda como drive_download_link, que es la columna real actual.
+    - drive_expires_at: se ignora si la columna no existe en db.py actual.
     """
     if not campos:
         return
@@ -182,10 +233,12 @@ def _safe_update_pedido(order_id: int, campos: Dict[str, Any]) -> None:
     for col, val in campos.items():
         if col in {"updated_at", "actualizado_en", "drive_expires_at"}:
             continue
-        if col in {"pdf_url", "download_link", "link_pdf"}:
-            col = "drive_download_link"
-        elif col == "error_message":
+        if col == "error_message":
             col = "error"
+        elif col == "pdf_url":
+            col = "drive_download_link"
+        elif col == "download_link":
+            col = "drive_download_link"
 
         if col == "error" and val is None:
             clear_error = True
@@ -194,13 +247,10 @@ def _safe_update_pedido(order_id: int, campos: Dict[str, Any]) -> None:
         normalizados[col] = val
 
     if not normalizados and not clear_error:
+        logger.debug("No hay campos reales para actualizar pedido #%s", order_id)
         return
 
-    database.update_pedido_campos(
-        int(order_id),
-        clear_error=clear_error,
-        **normalizados,
-    )
+    database.update_pedido_campos(int(order_id), clear_error=clear_error, **normalizados)
 
 
 def _project_root() -> Path:
@@ -215,19 +265,13 @@ def obtener_pedido(order_id: int) -> Optional[Dict[str, Any]]:
     row = database.get_pedido_by_id(int(order_id))
     if row is None:
         return None
-
-    pedido = dict(row)
-
-    # Alias de lectura para mantener compatibilidad con este módulo.
+    pedido = _row_to_dict(row)
+    # Alias de lectura para funciones antiguas que esperaban pdf_url.
     if not pedido.get("pdf_url"):
         pedido["pdf_url"] = (
             pedido.get("drive_download_link")
             or pedido.get("drive_view_link")
         )
-
-    if not pedido.get("created_at"):
-        pedido["created_at"] = pedido.get("creado_en")
-
     return pedido
 
 
@@ -249,31 +293,6 @@ def marcar_completado(order_id: int) -> None:
 
 def marcar_error(order_id: int, error: str) -> None:
     marcar_estado(order_id, ESTADO_ERROR, error)
-
-
-def _notificar_pago_confirmado_seguro(order_id: int) -> None:
-    """
-    Avisos inmediatos cuando Stripe confirma pago:
-    - admin: pago confirmado
-    - cliente: pago recibido y próximos pasos
-
-    Ninguno bloquea la generación de PDF si Brevo/email falla.
-    """
-    pedido = obtener_pedido(order_id)
-    if not pedido:
-        return
-
-    if notify_admin_pago_confirmado is not None:
-        try:
-            notify_admin_pago_confirmado(pedido)
-        except Exception:
-            logger.exception("No se pudo enviar aviso admin de pago confirmado pedido #%s", order_id)
-
-    if notify_customer_pago_confirmado is not None:
-        try:
-            notify_customer_pago_confirmado(pedido)
-        except Exception:
-            logger.exception("No se pudo enviar aviso cliente de pago confirmado pedido #%s", order_id)
 
 
 def _normalizar_pedido_para_pdf(pedido: Dict[str, Any]) -> Dict[str, Any]:
@@ -320,20 +339,113 @@ def _normalizar_pedido_para_pdf(pedido: Dict[str, Any]) -> Dict[str, Any]:
 # REUTILIZACION DE JSON OPENAI
 # =========================================================
 
+def _extraer_secciones_openai(data: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(data, dict):
+        return None
+
+    secciones = (
+        data.get("secciones")
+        or data.get("secciones_editoriales")
+        or data.get("contenido_openai")
+    )
+
+    if isinstance(secciones, dict):
+        return secciones
+
+    # Compatibilidad defensiva: algunos contenidos antiguos podían venir
+    # directamente como diccionario de secciones.
+    if any(k in data for k in SECCIONES_OPENAI_OBLIGATORIAS):
+        return data
+
+    return None
+
+
+def _json_openai_final_valido(data: Any) -> tuple[bool, str]:
+    """
+    Regla de producción:
+    - Solo se reutiliza JSON FINAL completo.
+    - Nunca se reutiliza PARCIAL, RESCATE, OK_SECCION ni ERROR_GLOBAL.
+    - Si falta una sección o un campo, se llama OpenAI de nuevo.
+    """
+    if not isinstance(data, dict):
+        return False, "JSON no es dict."
+
+    tipo = str(data.get("tipo") or data.get("version") or "").lower()
+    if any(palabra in tipo for palabra in TIPOS_JSON_NO_FINALES):
+        return False, f"JSON no final por tipo/version: {tipo}"
+
+    if data.get("faltantes"):
+        return False, f"JSON declara faltantes: {data.get('faltantes')}"
+
+    secciones = _extraer_secciones_openai(data)
+    if not isinstance(secciones, dict) or not secciones:
+        return False, "JSON no contiene secciones válidas."
+
+    faltantes: list[str] = []
+    campos_invalidos: list[str] = []
+
+    for sec in SECCIONES_OPENAI_OBLIGATORIAS:
+        node = secciones.get(sec)
+        if not isinstance(node, dict):
+            faltantes.append(sec)
+            continue
+
+        for campo in CAMPOS_OPENAI_OBLIGATORIOS:
+            valor = str(node.get(campo) or "").strip()
+            if len(valor) < 40:
+                campos_invalidos.append(f"{sec}.{campo}")
+
+    if faltantes:
+        return False, "Faltan secciones obligatorias: " + ", ".join(faltantes)
+
+    if campos_invalidos:
+        return False, "Campos vacíos/cortos: " + ", ".join(campos_invalidos[:8])
+
+    return True, "ok"
+
+
+def _path_json_openai_permitido(path: Path) -> tuple[bool, str]:
+    nombre = path.name
+
+    if nombre.startswith(PREFIJOS_JSON_NO_FINALES):
+        return False, f"Archivo no final por prefijo: {nombre}"
+
+    if nombre.upper().startswith("PARCIAL"):
+        return False, f"Archivo parcial rechazado: {nombre}"
+
+    return True, "ok"
+
+
 def _cargar_json_si_existe(path: Path) -> Optional[Dict[str, Any]]:
     try:
         if not path.exists() or not path.is_file():
             return None
 
+        permitido, motivo_path = _path_json_openai_permitido(path)
+        if not permitido:
+            logger.warning(
+                "JSON OpenAI ignorado para producción: %s (%s)",
+                path,
+                motivo_path,
+            )
+            return None
+
         with path.open("r", encoding="utf-8") as f:
             data = json.load(f)
 
-        if isinstance(data, dict) and data:
-            logger.info("JSON OpenAI reutilizado desde: %s", path)
+        valido, motivo = _json_openai_final_valido(data)
+        if valido:
+            logger.info("JSON OpenAI FINAL reutilizado desde: %s", path)
             return data
 
+        logger.warning(
+            "JSON OpenAI ignorado porque no está completo: %s (%s)",
+            path,
+            motivo,
+        )
+
     except Exception:
-        logger.exception("No se pudo leer JSON existente: %s", path)
+        logger.exception("No se pudo leer/validar JSON existente: %s", path)
 
     return None
 
@@ -342,10 +454,10 @@ def _buscar_json_openai_guardado(order_id: int, pedido: Dict[str, Any]) -> Optio
     """
     Busca contenido OpenAI ya guardado para NO gastar saldo otra vez.
 
-    Revisa:
-    1. Columnas posibles en DB.
-    2. Rutas comunes en output/.
-    3. Cualquier JSON relacionado con el pedido_id.
+    Protección de producción:
+    - Solo reutiliza JSON final completo.
+    - Ignora PARCIAL_ / RESCATE_ / OK_SECCION_ / ERROR_GLOBAL_.
+    - Si falta una sección obligatoria, NO lo usa y permite llamar OpenAI.
     """
 
     posibles_columnas = [
@@ -363,8 +475,16 @@ def _buscar_json_openai_guardado(order_id: int, pedido: Dict[str, Any]) -> Optio
             continue
 
         if isinstance(value, dict):
-            logger.info("Contenido OpenAI reutilizado desde columna DB: %s", col)
-            return value
+            valido, motivo = _json_openai_final_valido(value)
+            if valido:
+                logger.info("Contenido OpenAI FINAL reutilizado desde columna DB: %s", col)
+                return value
+            logger.warning(
+                "Contenido OpenAI en columna %s ignorado porque no está completo: %s",
+                col,
+                motivo,
+            )
+            continue
 
         if isinstance(value, str):
             text = value.strip()
@@ -375,11 +495,18 @@ def _buscar_json_openai_guardado(order_id: int, pedido: Dict[str, Any]) -> Optio
             if text.startswith("{"):
                 try:
                     data = json.loads(text)
-                    if isinstance(data, dict) and data:
-                        logger.info("Contenido OpenAI reutilizado desde JSON DB: %s", col)
+                    valido, motivo = _json_openai_final_valido(data)
+                    if valido:
+                        logger.info("Contenido OpenAI FINAL reutilizado desde JSON DB: %s", col)
                         return data
+                    logger.warning(
+                        "JSON OpenAI en DB ignorado porque no está completo (%s): %s",
+                        col,
+                        motivo,
+                    )
                 except Exception:
-                    pass
+                    logger.warning("No se pudo interpretar JSON en columna DB: %s", col)
+                continue
 
             posible_path = Path(text)
             if not posible_path.is_absolute():
@@ -392,6 +519,7 @@ def _buscar_json_openai_guardado(order_id: int, pedido: Dict[str, Any]) -> Optio
     root = _project_root()
 
     posibles_paths = [
+        root / "output" / "json_openai" / f"openai_pedido_{order_id}.json",
         root / "output" / "json" / f"pedido_{order_id}.json",
         root / "output" / "json" / f"mapa_alma_{order_id}.json",
         root / "output" / "openai" / f"pedido_{order_id}.json",
@@ -415,13 +543,26 @@ def _buscar_json_openai_guardado(order_id: int, pedido: Dict[str, Any]) -> Optio
                 f"*{order_id}*.json",
                 f"pedido_{order_id}_*.json",
                 f"mapa_alma_{order_id}_*.json",
+                f"openai_pedido_{order_id}*.json",
             ]
 
+            candidatos: list[Path] = []
             for patron in patrones:
-                for path in output_dir.rglob(patron):
-                    data = _cargar_json_si_existe(path)
-                    if data:
-                        return data
+                candidatos.extend(output_dir.rglob(patron))
+
+            # Prioriza archivos finales conocidos; deja últimos los candidatos dudosos.
+            candidatos = sorted(
+                set(candidatos),
+                key=lambda p: (
+                    p.name.startswith(PREFIJOS_JSON_NO_FINALES),
+                    -p.stat().st_mtime if p.exists() else 0,
+                ),
+            )
+
+            for path in candidatos:
+                data = _cargar_json_si_existe(path)
+                if data:
+                    return data
     except Exception:
         logger.exception("Error buscando JSON OpenAI guardado para pedido #%s", order_id)
 
@@ -431,28 +572,55 @@ def _buscar_json_openai_guardado(order_id: int, pedido: Dict[str, Any]) -> Optio
 def _asegurar_contenido_openai(data_pdf: Dict[str, Any], pedido: Dict[str, Any]) -> Dict[str, Any]:
     """
     Regla de oro:
-    - Si ya existe contenido, reutilizar.
-    - Si existe JSON guardado, reutilizar.
-    - Solo si no existe nada, llamar OpenAI.
+    - Si ya existe contenido FINAL completo, reutilizar.
+    - Si existe JSON guardado FINAL completo, reutilizar.
+    - Si existe JSON parcial/corrupto/incompleto, ignorar y llamar OpenAI.
+    - Nunca generar PDF con contenido incompleto.
     """
 
     order_id = int(data_pdf.get("pedido_id") or data_pdf.get("id") or pedido.get("id"))
 
     if data_pdf.get("contenido_openai"):
-        logger.info("Pedido #%s ya trae contenido_openai. No se llama OpenAI.", order_id)
-        return data_pdf
+        valido, motivo = _json_openai_final_valido(data_pdf.get("contenido_openai"))
+        if valido:
+            logger.info("Pedido #%s ya trae contenido_openai FINAL. No se llama OpenAI.", order_id)
+            return data_pdf
+        logger.warning(
+            "Pedido #%s trae contenido_openai incompleto. Se ignorará y se llamará OpenAI: %s",
+            order_id,
+            motivo,
+        )
+        data_pdf.pop("contenido_openai", None)
 
     if data_pdf.get("secciones"):
-        logger.info("Pedido #%s trae secciones. No se llama OpenAI.", order_id)
-        data_pdf["contenido_openai"] = data_pdf["secciones"]
-        return data_pdf
+        candidato = {"secciones": data_pdf.get("secciones")}
+        valido, motivo = _json_openai_final_valido(candidato)
+        if valido:
+            logger.info("Pedido #%s trae secciones completas. No se llama OpenAI.", order_id)
+            data_pdf["contenido_openai"] = candidato
+            return data_pdf
+        logger.warning(
+            "Pedido #%s trae secciones incompletas. Se ignorarán y se llamará OpenAI: %s",
+            order_id,
+            motivo,
+        )
+        data_pdf.pop("secciones", None)
 
     contenido_guardado = _buscar_json_openai_guardado(order_id, pedido)
 
     if contenido_guardado:
-        data_pdf["contenido_openai"] = contenido_guardado
-        data_pdf["_reutilizado"] = True
-        return data_pdf
+        valido, motivo = _json_openai_final_valido(contenido_guardado)
+        if not valido:
+            # Doble candado. En teoría no debería llegar aquí.
+            logger.warning(
+                "JSON encontrado para pedido #%s fue rechazado en doble validación: %s",
+                order_id,
+                motivo,
+            )
+        else:
+            data_pdf["contenido_openai"] = contenido_guardado
+            data_pdf["_reutilizado"] = True
+            return data_pdf
 
     if generar_contenido_mapa is None:
         raise RuntimeError(
@@ -460,14 +628,22 @@ def _asegurar_contenido_openai(data_pdf: Dict[str, Any], pedido: Dict[str, Any])
         )
 
     logger.warning(
-        "Pedido #%s NO tiene JSON guardado. Se llamará OpenAI UNA sola vez para este pedido.",
+        "Pedido #%s NO tiene JSON FINAL completo. Se llamará OpenAI para generar contenido válido.",
         order_id,
     )
 
+    # Fuerza que app.openai_generator no intente reutilizar nada viejo si el pedido
+    # venía de un error por contenido incompleto.
+    data_pdf["force_regenerate"] = bool(data_pdf.get("force_regenerate") or data_pdf.get("regenerar"))
+
     contenido = generar_contenido_mapa(data_pdf)
 
-    if not contenido:
-        raise RuntimeError("OpenAI no devolvió contenido válido.")
+    valido, motivo = _json_openai_final_valido(contenido)
+    if not valido:
+        raise RuntimeError(
+            "OpenAI devolvió contenido incompleto. No se genera PDF malo. "
+            f"Motivo: {motivo}"
+        )
 
     data_pdf["contenido_openai"] = contenido
     data_pdf["_reutilizado"] = bool(
@@ -579,18 +755,15 @@ def _pdf_local_existente(pedido: Dict[str, Any], order_id: int) -> Optional[Path
 def _drive_link_vigente(pedido: Dict[str, Any]) -> bool:
     drive_file_id = pedido.get("drive_file_id")
     pdf_url = (
-        pedido.get("drive_download_link")
-        or pedido.get("pdf_url")
+        pedido.get("pdf_url")
+        or pedido.get("drive_download_link")
         or pedido.get("drive_view_link")
     )
-
-    # La base actual no siempre tiene drive_expires_at.
-    # Si existe y está vencido, se regenera el enlace; si no existe, se acepta el link.
     expires_at = _parse_datetime(pedido.get("drive_expires_at"))
-    if not drive_file_id or not pdf_url:
+
+    if not drive_file_id or not pdf_url or not expires_at:
         return False
-    if expires_at is None:
-        return True
+
     return expires_at > _utc_now()
 
 
@@ -611,10 +784,10 @@ def _guardar_drive_en_db(order_id: int, pdf_path: Path, drive_result: Optional[D
         {
             "estado": ESTADO_PDF_GENERADO,
             "pdf_path": str(pdf_path),
-            "pdf_url": pdf_url,
             "drive_file_id": drive_file_id,
+            "drive_view_link": drive_result.get("view_link") if drive_result else pdf_url,
+            "drive_download_link": pdf_url,
             "drive_expires_at": drive_expires_at,
-            "updated_at": _iso(_utc_now()),
         },
     )
 
@@ -680,38 +853,9 @@ def _enviar_email_cliente_seguro(
         raise
 
 
-def _es_error_openai_credito(error: Exception | str) -> bool:
-    texto = str(error or "").lower()
-    claves = (
-        "insufficient_quota",
-        "quota",
-        "billing_hard_limit",
-        "billing hard limit",
-        "exceeded your current quota",
-        "you exceeded your current quota",
-        "check your plan and billing",
-        "credit",
-        "credits",
-        "saldo",
-        "sin saldo",
-        "límite de facturación",
-        "limite de facturacion",
-        "billing",
-        "rate limit reached for",
-    )
-    return any(c in texto for c in claves)
-
-
-def _stage_error_post_pago(error: Exception | str) -> str:
-    if _es_error_openai_credito(error):
-        return "openai_credito"
-    return "generacion_pdf"
-
-
 def _notificar_admin_error(
     order_id: int,
     error: Exception,
-    stage: Optional[str] = None,
 ) -> None:
 
     if enviar_email_admin_error is None:
@@ -722,21 +866,16 @@ def _notificar_admin_error(
         )
         return
 
-    pedido = obtener_pedido(order_id)
-    stage_final = stage or _stage_error_post_pago(error)
-
     try:
         try:
             enviar_email_admin_error(
-                int(order_id),
+                order_id,
                 str(error),
-                stage=stage_final,
-                pedido=pedido,
             )
         except TypeError:
             enviar_email_admin_error(
-                order_id,
-                str(error),
+                asunto=f"Error pedido #{order_id}",
+                mensaje=str(error),
             )
     except Exception:
         logger.exception("Falló email de error admin.")
@@ -786,7 +925,7 @@ def generar_pdf_automatico(order_id: int, forzar_regeneracion: bool = False) -> 
             "ok": True,
             "order_id": order_id,
             "pdf_path": str(pdf_existente),
-            "pdf_url": (pedido.get("drive_download_link") or pedido.get("pdf_url") or pedido.get("drive_view_link")),
+            "pdf_url": pedido.get("pdf_url"),
             "drive_file_id": pedido.get("drive_file_id"),
             "drive_expires_at": pedido.get("drive_expires_at"),
             "drive_usado": True,
@@ -876,8 +1015,6 @@ def procesar_post_pago(order_id: int) -> Dict[str, Any]:
         ESTADO_PAGADO,
         ESTADO_PDF_GENERADO,
         ESTADO_COMPLETADO,
-        ESTADO_ERROR,
-        ESTADO_ERROR_ENVIO,
     }
 
     if estado not in estados_validos:
@@ -898,38 +1035,22 @@ def procesar_post_pago(order_id: int) -> Dict[str, Any]:
     try:
         logger.info("Procesando post-pago pedido #%s", order_id)
 
-        pago_recien_confirmado = estado == ESTADO_PENDIENTE_PAGO
-
         if estado != ESTADO_COMPLETADO:
             marcar_estado(order_id, ESTADO_PAGADO)
-
-        if pago_recien_confirmado:
-            _notificar_pago_confirmado_seguro(order_id)
 
         resultado_pdf = generar_pdf_automatico(order_id)
 
         pedido_actualizado = obtener_pedido(order_id) or pedido
 
-        pdf_url = (
-            resultado_pdf.get("pdf_url")
-            or resultado_pdf.get("drive_download_link")
-            or pedido_actualizado.get("drive_download_link")
-            or pedido_actualizado.get("pdf_url")
-            or pedido_actualizado.get("drive_view_link")
-        )
+        pdf_url = resultado_pdf.get("pdf_url") or pedido_actualizado.get("pdf_url")
 
         if not pdf_url:
             raise RuntimeError(f"No existe pdf_url para pedido #{order_id}")
 
-        try:
-            _enviar_email_cliente_seguro(
-                pedido_actualizado,
-                pdf_url,
-            )
-        except Exception as exc:
-            marcar_estado(order_id, ESTADO_ERROR_ENVIO, str(exc))
-            _notificar_admin_error(order_id, exc, stage="envio_email")
-            raise
+        _enviar_email_cliente_seguro(
+            pedido_actualizado,
+            pdf_url,
+        )
 
         _safe_update_pedido(
             order_id,
@@ -954,9 +1075,7 @@ def procesar_post_pago(order_id: int) -> Dict[str, Any]:
 
     except Exception as e:
         _rollback(get_db())
-        pedido_final = obtener_pedido(order_id)
-        if not pedido_final or pedido_final.get("estado") != ESTADO_ERROR_ENVIO:
-            marcar_estado(order_id, ESTADO_ERROR, str(e))
+        marcar_estado(order_id, ESTADO_ERROR, str(e))
         _notificar_admin_error(order_id, e)
 
         logger.exception(
@@ -1008,10 +1127,10 @@ def regenerar_pdf_pedido(order_id: int, forzar_openai: bool = False) -> Dict[str
         order_id,
         {
             "drive_file_id": None,
-            "pdf_url": None,
+            "drive_view_link": None,
+            "drive_download_link": None,
             "drive_expires_at": None,
             "estado": ESTADO_PAGADO,
-            "updated_at": _iso(_utc_now()),
         },
     )
 
@@ -1022,42 +1141,19 @@ def regenerar_pdf_pedido(order_id: int, forzar_openai: bool = False) -> Dict[str
 # PEDIDOS ATASCADOS
 # =========================================================
 
-def detectar_pedidos_atascados(minutos: int = 30, timeout_minutes: Optional[int] = None) -> List[Dict[str, Any]]:
-    db = get_db()
-    ph = _db_placeholder()
-
-    if timeout_minutes is not None:
-        minutos = int(timeout_minutes)
-
+def detectar_pedidos_atascados(minutos: int = 30) -> List[Dict[str, Any]]:
     limite = _utc_now() - timedelta(minutes=minutos)
     limite_iso = _iso(limite)
 
     try:
-        cur = _execute(
-            db,
-            f"""
-            SELECT *
-            FROM pedidos
-            WHERE estado = {ph}
-              AND (
-                    actualizado_en IS NULL
-                    OR actualizado_en < {ph}
-                  )
-            ORDER BY id DESC
-            """,
-            (
-                ESTADO_GENERANDO_PDF,
-                limite_iso,
-            ),
+        rows = database.pedidos_atascados_en_estado(
+            [ESTADO_GENERANDO_PDF],
+            antes_de_iso=limite_iso,
+            limit=100,
         )
+        pedidos = [_row_to_dict(row) for row in rows]
 
-        pedidos = _fetchall_dict(cur)
-
-        logger.info(
-            "Pedidos atascados detectados: %s",
-            len(pedidos),
-        )
-
+        logger.info("Pedidos atascados detectados: %s", len(pedidos))
         return pedidos
 
     except Exception:
@@ -1097,9 +1193,7 @@ def reenviar_notificaciones_pedido(order_id: int) -> Dict[str, Any]:
         raise ValueError(f"No existe el pedido #{order_id}")
 
     pdf_url = (
-        pedido.get("drive_download_link")
-        or pedido.get("pdf_url")
-        or pedido.get("drive_view_link")
+        pedido.get("pdf_url")
         or pedido.get("download_link")
         or pedido.get("link_pdf")
     )
