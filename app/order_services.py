@@ -680,9 +680,38 @@ def _enviar_email_cliente_seguro(
         raise
 
 
+def _es_error_openai_credito(error: Exception | str) -> bool:
+    texto = str(error or "").lower()
+    claves = (
+        "insufficient_quota",
+        "quota",
+        "billing_hard_limit",
+        "billing hard limit",
+        "exceeded your current quota",
+        "you exceeded your current quota",
+        "check your plan and billing",
+        "credit",
+        "credits",
+        "saldo",
+        "sin saldo",
+        "límite de facturación",
+        "limite de facturacion",
+        "billing",
+        "rate limit reached for",
+    )
+    return any(c in texto for c in claves)
+
+
+def _stage_error_post_pago(error: Exception | str) -> str:
+    if _es_error_openai_credito(error):
+        return "openai_credito"
+    return "generacion_pdf"
+
+
 def _notificar_admin_error(
     order_id: int,
     error: Exception,
+    stage: Optional[str] = None,
 ) -> None:
 
     if enviar_email_admin_error is None:
@@ -693,16 +722,21 @@ def _notificar_admin_error(
         )
         return
 
+    pedido = obtener_pedido(order_id)
+    stage_final = stage or _stage_error_post_pago(error)
+
     try:
         try:
             enviar_email_admin_error(
-                order_id,
+                int(order_id),
                 str(error),
+                stage=stage_final,
+                pedido=pedido,
             )
         except TypeError:
             enviar_email_admin_error(
-                asunto=f"Error pedido #{order_id}",
-                mensaje=str(error),
+                order_id,
+                str(error),
             )
     except Exception:
         logger.exception("Falló email de error admin.")
@@ -842,6 +876,8 @@ def procesar_post_pago(order_id: int) -> Dict[str, Any]:
         ESTADO_PAGADO,
         ESTADO_PDF_GENERADO,
         ESTADO_COMPLETADO,
+        ESTADO_ERROR,
+        ESTADO_ERROR_ENVIO,
     }
 
     if estado not in estados_validos:
@@ -862,7 +898,7 @@ def procesar_post_pago(order_id: int) -> Dict[str, Any]:
     try:
         logger.info("Procesando post-pago pedido #%s", order_id)
 
-        pago_recien_confirmado = estado not in {ESTADO_PAGADO, ESTADO_COMPLETADO}
+        pago_recien_confirmado = estado == ESTADO_PENDIENTE_PAGO
 
         if estado != ESTADO_COMPLETADO:
             marcar_estado(order_id, ESTADO_PAGADO)
@@ -892,7 +928,7 @@ def procesar_post_pago(order_id: int) -> Dict[str, Any]:
             )
         except Exception as exc:
             marcar_estado(order_id, ESTADO_ERROR_ENVIO, str(exc))
-            _notificar_admin_error(order_id, exc)
+            _notificar_admin_error(order_id, exc, stage="envio_email")
             raise
 
         _safe_update_pedido(

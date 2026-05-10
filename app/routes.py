@@ -826,7 +826,7 @@ def current_app_password():
 def admin_pedidos():
     """Bandeja principal: solo pedidos que requieren atención."""
     try:
-        atascados_lista = detectar_pedidos_atascados(20)
+        atascados_lista = detectar_pedidos_atascados(timeout_minutes=20)
         atascados = len(atascados_lista or [])
     except Exception as exc:  # noqa: BLE001
         logger.exception("No se pudo revisar pedidos atascados en admin: %s", exc)
@@ -1037,12 +1037,63 @@ def admin_pedido_estado(pedido_id: int):
 @bp.route("/admin/pedidos/<int:pedido_id>/marcar-pagado", methods=["POST"])
 @admin_required
 def admin_pedido_marcar_pagado(pedido_id: int):
-    """Marca el pedido como pagado (paso previo típico a generar PDF)."""
+    """
+    Marca el pedido como pagado y reintenta el flujo post-pago.
+
+    Uso clave:
+    - Si OpenAI falló por falta de crédito, recargas OpenAI y pulsas
+      este botón para continuar el MISMO pedido, sin cobrar de nuevo.
+    - Si ya existe JSON/PDF, order_services reutiliza lo disponible para
+      evitar gasto innecesario.
+    """
+    pedido = database.get_pedido_by_id(pedido_id)
+    if pedido is None:
+        flash("Pedido no encontrado.", "error")
+        return redirect(url_for("main.admin_pedidos"))
+
+    database.update_pedido_campos(pedido_id, estado=ESTADO_PAGADO, clear_error=True)
+
+    try:
+        resultado = procesar_post_pago(pedido_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Reintento post-pago falló desde admin pedido #%s: %s", pedido_id, exc)
+        flash(
+            "Pedido marcado como pagado, pero el reintento falló. "
+            "Si fue falta de saldo OpenAI, recarga y vuelve a pulsar este botón. "
+            f"Detalle: {exc}",
+            "error",
+        )
+        return redirect(url_for("main.admin_pedido_detail", pedido_id=pedido_id))
+
+    if resultado.get("ok"):
+        flash("Pedido reprocesado correctamente: PDF/enlace/email completados.", "success")
+    else:
+        flash(f"Reintento ejecutado pero no completado: {resultado}", "info")
+
+    return redirect(url_for("main.admin_pedido_detail", pedido_id=pedido_id))
+
+
+@bp.route("/admin/pedidos/<int:pedido_id>/reintentar-post-pago", methods=["POST"])
+@admin_required
+def admin_pedido_reintentar_post_pago(pedido_id: int):
+    """Ruta explícita de reintento del flujo post-pago para pedidos ya cobrados."""
     if database.get_pedido_by_id(pedido_id) is None:
         flash("Pedido no encontrado.", "error")
         return redirect(url_for("main.admin_pedidos"))
-    database.update_pedido_campos(pedido_id, estado=ESTADO_PAGADO, clear_error=True)
-    flash("Pedido marcado como pagado.", "info")
+
+    try:
+        database.update_pedido_campos(pedido_id, estado=ESTADO_PAGADO, clear_error=True)
+        resultado = procesar_post_pago(pedido_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Reintento post-pago falló desde admin pedido #%s: %s", pedido_id, exc)
+        flash(f"No se pudo completar el reintento: {exc}", "error")
+        return redirect(url_for("main.admin_pedido_detail", pedido_id=pedido_id))
+
+    if resultado.get("ok"):
+        flash("Reintento completado correctamente.", "success")
+    else:
+        flash(f"Reintento ejecutado: {resultado}", "info")
+
     return redirect(url_for("main.admin_pedido_detail", pedido_id=pedido_id))
 
 

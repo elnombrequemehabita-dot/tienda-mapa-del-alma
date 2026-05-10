@@ -267,11 +267,58 @@ def _build_customer_html_body(pedido: Any, pdf_url: str, resena_url: str) -> str
 """.strip()
 
 
+def _es_error_openai_credito_texto(texto: str) -> bool:
+    lower = (texto or "").lower()
+    claves = (
+        "insufficient_quota",
+        "quota",
+        "billing_hard_limit",
+        "billing hard limit",
+        "exceeded your current quota",
+        "you exceeded your current quota",
+        "check your plan and billing",
+        "credit",
+        "credits",
+        "saldo",
+        "sin saldo",
+        "límite de facturación",
+        "limite de facturacion",
+        "billing",
+        "rate limit reached for",
+    )
+    return any(c in lower for c in claves)
+
+
 def _build_admin_error_body(order_id: int, stage: str, error_message: str, pedido: Optional[Any] = None) -> str:
     error_text = (error_message or "").strip()
     stage_text = stage or "post_pago"
+
+    if stage_text == "openai_credito" or _es_error_openai_credito_texto(error_text):
+        titulo = "OpenAI no pudo generar el contenido por saldo/cuota/limite de facturacion."
+        acciones = [
+            "Entrar al panel de OpenAI y revisar Billing / Usage.",
+            "Recargar saldo o aumentar el limite de presupuesto si aplica.",
+            "Cuando el saldo esté activo otra vez, volver al pedido en admin.",
+            "Pulsar 'Marcar como pagado' para reintentar el flujo sin cobrar de nuevo.",
+            "No crear otro pedido y no pedirle al cliente que pague otra vez.",
+        ]
+    elif stage_text == "envio_email":
+        titulo = "El pedido se cobró, pero falló el envío del email al cliente."
+        acciones = [
+            "Revisar Brevo API key, sender verificado y Authorized IPs.",
+            "Confirmar que el pedido tenga enlace PDF.",
+            "Reintentar notificaciones desde el panel admin cuando esté corregido.",
+        ]
+    else:
+        titulo = "Se produjo un error en el flujo post-pago del pedido."
+        acciones = [
+            "Revisar logs de Render para ver el traceback completo.",
+            "Revisar el pedido en el panel admin.",
+            "Cuando el problema esté corregido, reintentar desde admin con 'Marcar como pagado'.",
+        ]
+
     parts = [
-        "Se produjo un error en el flujo post-pago del pedido.",
+        titulo,
         "",
         f"Pedido interno: #{order_id}",
         f"Codigo de confirmacion: {_codigo_por_order_id(order_id)}",
@@ -279,10 +326,9 @@ def _build_admin_error_body(order_id: int, stage: str, error_message: str, pedid
         f"Error tecnico: {error_text or '(sin detalle)'}",
         "",
         "Acciones sugeridas:",
-        "- Revisar logs de Render para ver el traceback completo.",
-        "- Revisar el pedido en el panel admin.",
-        "- Reintentar el envío cuando el problema esté corregido.",
     ]
+    parts.extend([f"- {a}" for a in acciones])
+
     if pedido is not None:
         parts.extend(
             [
@@ -446,7 +492,10 @@ def notify_admin_error(order_id: int, stage: str, error_message: str, pedido: Op
     try:
         msg = EmailMessage()
         codigo = _codigo_por_order_id(order_id)
-        if stage == "generacion_pdf":
+        error_lower = (error_message or "").lower()
+        if stage == "openai_credito" or _es_error_openai_credito_texto(error_lower):
+            msg["Subject"] = f"URGENTE: recargar OpenAI - Pedido #{order_id} [{codigo}]"
+        elif stage == "generacion_pdf":
             msg["Subject"] = f"URGENTE: pago cobrado pero PDF no generado - Pedido #{order_id} [{codigo}]"
         elif stage == "envio_email":
             msg["Subject"] = f"URGENTE: pago cobrado pero email no enviado - Pedido #{order_id} [{codigo}]"
