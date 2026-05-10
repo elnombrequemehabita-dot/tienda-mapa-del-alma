@@ -7,6 +7,7 @@ import logging
 import os
 import smtplib
 from email.message import EmailMessage
+import requests
 from typing import Any, Optional
 
 from app import db as database
@@ -40,6 +41,16 @@ def get_email_sender() -> str:
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SUBJECT_CUSTOMER_PDF = "Tu Mapa del Alma esta listo (pedido #{order_id})"
+
+BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
+
+
+def _brevo_api_key() -> str:
+    return (os.environ.get("BREVO_API_KEY") or "").strip()
+
+
+def _usar_brevo() -> bool:
+    return bool(_brevo_api_key())
 
 
 def _codigo_pedido(pedido: Any) -> str:
@@ -76,7 +87,7 @@ def _build_admin_envio_cliente_body(pedido: Any) -> str:
         f"Codigo de confirmacion: {_codigo_pedido(pedido)}\n"
         f"Cliente: {pedido['nombre']} {pedido['apellidos'] or ''}\n"
         f"Email cliente: {pedido['email']}\n"
-        f"URL PDF: {pedido['pdf_url'] or '(no disponible)'}\n"
+        f"URL PDF: {(pedido.get('drive_download_link') or pedido.get('pdf_url') or '(no disponible)')}\n"
         f"Estado actual: {pedido['estado']}\n"
     )
 
@@ -236,12 +247,60 @@ def _build_admin_error_body(order_id: int, stage: str, error_message: str, pedid
 
 
 def _send_message(msg: EmailMessage) -> None:
+    """
+    Envío principal:
+    - Brevo API (recomendado para Render)
+    - fallback SMTP Gmail si BREVO_API_KEY no existe
+    """
+
+    if _usar_brevo():
+        sender = _email_sender()
+
+        payload = {
+            "sender": {
+                "name": "El Nombre Que Me Habita",
+                "email": sender,
+            },
+            "to": [
+                {
+                    "email": str(msg["To"]),
+                }
+            ],
+            "subject": str(msg["Subject"]),
+            "textContent": msg.get_body(preferencelist=("plain",)).get_content(),
+        }
+
+        html_part = msg.get_body(preferencelist=("html",))
+        if html_part is not None:
+            payload["htmlContent"] = html_part.get_content()
+
+        response = requests.post(
+            BREVO_API_URL,
+            headers={
+                "accept": "application/json",
+                "api-key": _brevo_api_key(),
+                "content-type": "application/json",
+            },
+            json=payload,
+            timeout=30,
+        )
+
+        if response.status_code >= 400:
+            raise RuntimeError(
+                f"Brevo API error {response.status_code}: {response.text}"
+            )
+
+        return
+
+    # Fallback SMTP antiguo
     email_password = (os.environ.get("EMAIL_PASSWORD") or "").strip()
     if not email_password:
         raise ValueError(
-            "EMAIL_PASSWORD no configurado en .env (contraseña de aplicación Gmail del remitente)."
+            "No existe BREVO_API_KEY y EMAIL_PASSWORD tampoco está configurado."
         )
+
     sender = _email_sender()
+
     with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as smtp:
         smtp.starttls()
         smtp.login(sender, email_password)
