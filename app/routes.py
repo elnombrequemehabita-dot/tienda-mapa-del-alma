@@ -826,7 +826,7 @@ def current_app_password():
 def admin_pedidos():
     """Bandeja principal: solo pedidos que requieren atención."""
     try:
-        atascados_lista = detectar_pedidos_atascados(timeout_minutes=20)
+        atascados_lista = detectar_pedidos_atascados(20)
         atascados = len(atascados_lista or [])
     except Exception as exc:  # noqa: BLE001
         logger.exception("No se pudo revisar pedidos atascados en admin: %s", exc)
