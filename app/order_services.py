@@ -23,10 +23,14 @@ try:
     from app.email_service import (
         enviar_email_pedido_completado,
         enviar_email_admin_error,
+        notify_admin_pago_confirmado,
+        notify_customer_pago_confirmado,
     )
 except Exception:
     enviar_email_pedido_completado = None
     enviar_email_admin_error = None
+    notify_admin_pago_confirmado = None
+    notify_customer_pago_confirmado = None
 
 try:
     from app.google_drive_oauth import (
@@ -46,6 +50,7 @@ ESTADO_GENERANDO_PDF = "generando_pdf"
 ESTADO_PDF_GENERADO = "pdf_generado"
 ESTADO_COMPLETADO = "completado"
 ESTADO_ERROR = "error_generacion"
+ESTADO_ERROR_ENVIO = "error_envio"
 
 DRIVE_EXPIRACION_HORAS = 72
 
@@ -82,20 +87,19 @@ def _parse_datetime(value: Any) -> Optional[datetime]:
 
 
 def _db_placeholder() -> str:
-    # El proyecto escribe SQL interno con ?. app.db.execute convierte ? -> %s
-    # automáticamente cuando DATABASE_URL apunta a PostgreSQL.
+    # El código interno usa ?. app.db convierte ? -> %s en PostgreSQL.
     return "?"
 
 
-def _execute(db, sql: str, params: tuple = ()):  # db se conserva por compatibilidad interna
+def _execute(db, sql: str, params: tuple = ()):  # db se conserva por compatibilidad
     return database.execute(sql, params)
 
 
-def _commit(db):  # db se conserva por compatibilidad interna
+def _commit(db):  # db se conserva por compatibilidad
     database.commit()
 
 
-def _rollback(db):  # db se conserva por compatibilidad interna
+def _rollback(db):  # db se conserva por compatibilidad
     database.rollback()
 
 
@@ -126,32 +130,26 @@ def _fetchall_dict(cursor) -> List[Dict[str, Any]]:
     return result
 
 
-def _row_to_dict(row: Any) -> Dict[str, Any]:
-    try:
-        return dict(row)
-    except Exception:
-        return {k: row[k] for k in row.keys()}
-
-
 def _column_exists(db, table: str, column: str) -> bool:
     """
-    Compatibilidad defensiva para SQLite/PostgreSQL.
-    Se mantiene por si alguna ruta antigua llama esta función, pero las
-    actualizaciones nuevas pasan por app.db.update_pedido_campos().
+    Compatibilidad defensiva. Las actualizaciones reales pasan por app.db.
     """
     try:
-        if str(type(db)).lower().find("psycopg2") >= 0:
-            cur = database.execute(
-                """
-                SELECT 1
-                FROM information_schema.columns
-                WHERE table_name = ? AND column_name = ?
-                LIMIT 1
-                """,
-                (table, column),
-            )
-            return cur.fetchone() is not None
+        cur = database.execute(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_name = ? AND column_name = ?
+            LIMIT 1
+            """,
+            (table, column),
+        )
+        if cur.fetchone() is not None:
+            return True
+    except Exception:
+        pass
 
+    try:
         cur = db.cursor()
         cur.execute(f"PRAGMA table_info({table})")
         cols = []
@@ -162,19 +160,18 @@ def _column_exists(db, table: str, column: str) -> bool:
                 cols.append(r[1])
         return column in cols
     except Exception:
-        logger.debug("No se pudo verificar columna %s.%s", table, column, exc_info=True)
         return False
 
 
 def _safe_update_pedido(order_id: int, campos: Dict[str, Any]) -> None:
     """
-    Actualiza pedidos usando app.db como única capa oficial.
+    Actualiza pedidos usando app.db como capa oficial.
 
-    Conserva compatibilidad con nombres antiguos que aparecían en este módulo:
-    - updated_at / actualizado_en: app.db ya actualiza actualizado_en automáticamente.
-    - error_message: se guarda como error.
-    - pdf_url: se guarda como drive_download_link, que es la columna real actual.
-    - drive_expires_at: se ignora si la columna no existe en db.py actual.
+    Mapea nombres antiguos:
+    - updated_at / actualizado_en se ignoran porque app.db actualiza actualizado_en.
+    - pdf_url / download_link se guardan como drive_download_link.
+    - error_message se guarda como error.
+    - drive_expires_at se ignora si la base actual no tiene esa columna.
     """
     if not campos:
         return
@@ -185,12 +182,10 @@ def _safe_update_pedido(order_id: int, campos: Dict[str, Any]) -> None:
     for col, val in campos.items():
         if col in {"updated_at", "actualizado_en", "drive_expires_at"}:
             continue
-        if col == "error_message":
+        if col in {"pdf_url", "download_link", "link_pdf"}:
+            col = "drive_download_link"
+        elif col == "error_message":
             col = "error"
-        elif col == "pdf_url":
-            col = "drive_download_link"
-        elif col == "download_link":
-            col = "drive_download_link"
 
         if col == "error" and val is None:
             clear_error = True
@@ -199,10 +194,13 @@ def _safe_update_pedido(order_id: int, campos: Dict[str, Any]) -> None:
         normalizados[col] = val
 
     if not normalizados and not clear_error:
-        logger.debug("No hay campos reales para actualizar pedido #%s", order_id)
         return
 
-    database.update_pedido_campos(int(order_id), clear_error=clear_error, **normalizados)
+    database.update_pedido_campos(
+        int(order_id),
+        clear_error=clear_error,
+        **normalizados,
+    )
 
 
 def _project_root() -> Path:
@@ -217,13 +215,19 @@ def obtener_pedido(order_id: int) -> Optional[Dict[str, Any]]:
     row = database.get_pedido_by_id(int(order_id))
     if row is None:
         return None
-    pedido = _row_to_dict(row)
-    # Alias de lectura para funciones antiguas que esperaban pdf_url.
+
+    pedido = dict(row)
+
+    # Alias de lectura para mantener compatibilidad con este módulo.
     if not pedido.get("pdf_url"):
         pedido["pdf_url"] = (
             pedido.get("drive_download_link")
             or pedido.get("drive_view_link")
         )
+
+    if not pedido.get("created_at"):
+        pedido["created_at"] = pedido.get("creado_en")
+
     return pedido
 
 
@@ -245,6 +249,31 @@ def marcar_completado(order_id: int) -> None:
 
 def marcar_error(order_id: int, error: str) -> None:
     marcar_estado(order_id, ESTADO_ERROR, error)
+
+
+def _notificar_pago_confirmado_seguro(order_id: int) -> None:
+    """
+    Avisos inmediatos cuando Stripe confirma pago:
+    - admin: pago confirmado
+    - cliente: pago recibido y próximos pasos
+
+    Ninguno bloquea la generación de PDF si Brevo/email falla.
+    """
+    pedido = obtener_pedido(order_id)
+    if not pedido:
+        return
+
+    if notify_admin_pago_confirmado is not None:
+        try:
+            notify_admin_pago_confirmado(pedido)
+        except Exception:
+            logger.exception("No se pudo enviar aviso admin de pago confirmado pedido #%s", order_id)
+
+    if notify_customer_pago_confirmado is not None:
+        try:
+            notify_customer_pago_confirmado(pedido)
+        except Exception:
+            logger.exception("No se pudo enviar aviso cliente de pago confirmado pedido #%s", order_id)
 
 
 def _normalizar_pedido_para_pdf(pedido: Dict[str, Any]) -> Dict[str, Any]:
@@ -550,15 +579,18 @@ def _pdf_local_existente(pedido: Dict[str, Any], order_id: int) -> Optional[Path
 def _drive_link_vigente(pedido: Dict[str, Any]) -> bool:
     drive_file_id = pedido.get("drive_file_id")
     pdf_url = (
-        pedido.get("pdf_url")
-        or pedido.get("drive_download_link")
+        pedido.get("drive_download_link")
+        or pedido.get("pdf_url")
         or pedido.get("drive_view_link")
     )
+
+    # La base actual no siempre tiene drive_expires_at.
+    # Si existe y está vencido, se regenera el enlace; si no existe, se acepta el link.
     expires_at = _parse_datetime(pedido.get("drive_expires_at"))
-
-    if not drive_file_id or not pdf_url or not expires_at:
+    if not drive_file_id or not pdf_url:
         return False
-
+    if expires_at is None:
+        return True
     return expires_at > _utc_now()
 
 
@@ -579,10 +611,10 @@ def _guardar_drive_en_db(order_id: int, pdf_path: Path, drive_result: Optional[D
         {
             "estado": ESTADO_PDF_GENERADO,
             "pdf_path": str(pdf_path),
+            "pdf_url": pdf_url,
             "drive_file_id": drive_file_id,
-            "drive_view_link": drive_result.get("view_link") if drive_result else pdf_url,
-            "drive_download_link": pdf_url,
             "drive_expires_at": drive_expires_at,
+            "updated_at": _iso(_utc_now()),
         },
     )
 
@@ -720,7 +752,7 @@ def generar_pdf_automatico(order_id: int, forzar_regeneracion: bool = False) -> 
             "ok": True,
             "order_id": order_id,
             "pdf_path": str(pdf_existente),
-            "pdf_url": pedido.get("pdf_url"),
+            "pdf_url": (pedido.get("drive_download_link") or pedido.get("pdf_url") or pedido.get("drive_view_link")),
             "drive_file_id": pedido.get("drive_file_id"),
             "drive_expires_at": pedido.get("drive_expires_at"),
             "drive_usado": True,
@@ -830,22 +862,38 @@ def procesar_post_pago(order_id: int) -> Dict[str, Any]:
     try:
         logger.info("Procesando post-pago pedido #%s", order_id)
 
+        pago_recien_confirmado = estado not in {ESTADO_PAGADO, ESTADO_COMPLETADO}
+
         if estado != ESTADO_COMPLETADO:
             marcar_estado(order_id, ESTADO_PAGADO)
+
+        if pago_recien_confirmado:
+            _notificar_pago_confirmado_seguro(order_id)
 
         resultado_pdf = generar_pdf_automatico(order_id)
 
         pedido_actualizado = obtener_pedido(order_id) or pedido
 
-        pdf_url = resultado_pdf.get("pdf_url") or pedido_actualizado.get("pdf_url")
+        pdf_url = (
+            resultado_pdf.get("pdf_url")
+            or resultado_pdf.get("drive_download_link")
+            or pedido_actualizado.get("drive_download_link")
+            or pedido_actualizado.get("pdf_url")
+            or pedido_actualizado.get("drive_view_link")
+        )
 
         if not pdf_url:
             raise RuntimeError(f"No existe pdf_url para pedido #{order_id}")
 
-        _enviar_email_cliente_seguro(
-            pedido_actualizado,
-            pdf_url,
-        )
+        try:
+            _enviar_email_cliente_seguro(
+                pedido_actualizado,
+                pdf_url,
+            )
+        except Exception as exc:
+            marcar_estado(order_id, ESTADO_ERROR_ENVIO, str(exc))
+            _notificar_admin_error(order_id, exc)
+            raise
 
         _safe_update_pedido(
             order_id,
@@ -870,7 +918,9 @@ def procesar_post_pago(order_id: int) -> Dict[str, Any]:
 
     except Exception as e:
         _rollback(get_db())
-        marcar_estado(order_id, ESTADO_ERROR, str(e))
+        pedido_final = obtener_pedido(order_id)
+        if not pedido_final or pedido_final.get("estado") != ESTADO_ERROR_ENVIO:
+            marcar_estado(order_id, ESTADO_ERROR, str(e))
         _notificar_admin_error(order_id, e)
 
         logger.exception(
@@ -922,10 +972,10 @@ def regenerar_pdf_pedido(order_id: int, forzar_openai: bool = False) -> Dict[str
         order_id,
         {
             "drive_file_id": None,
-            "drive_view_link": None,
-            "drive_download_link": None,
+            "pdf_url": None,
             "drive_expires_at": None,
             "estado": ESTADO_PAGADO,
+            "updated_at": _iso(_utc_now()),
         },
     )
 
@@ -936,19 +986,42 @@ def regenerar_pdf_pedido(order_id: int, forzar_openai: bool = False) -> Dict[str
 # PEDIDOS ATASCADOS
 # =========================================================
 
-def detectar_pedidos_atascados(minutos: int = 30) -> List[Dict[str, Any]]:
+def detectar_pedidos_atascados(minutos: int = 30, timeout_minutes: Optional[int] = None) -> List[Dict[str, Any]]:
+    db = get_db()
+    ph = _db_placeholder()
+
+    if timeout_minutes is not None:
+        minutos = int(timeout_minutes)
+
     limite = _utc_now() - timedelta(minutes=minutos)
     limite_iso = _iso(limite)
 
     try:
-        rows = database.pedidos_atascados_en_estado(
-            [ESTADO_GENERANDO_PDF],
-            antes_de_iso=limite_iso,
-            limit=100,
+        cur = _execute(
+            db,
+            f"""
+            SELECT *
+            FROM pedidos
+            WHERE estado = {ph}
+              AND (
+                    actualizado_en IS NULL
+                    OR actualizado_en < {ph}
+                  )
+            ORDER BY id DESC
+            """,
+            (
+                ESTADO_GENERANDO_PDF,
+                limite_iso,
+            ),
         )
-        pedidos = [_row_to_dict(row) for row in rows]
 
-        logger.info("Pedidos atascados detectados: %s", len(pedidos))
+        pedidos = _fetchall_dict(cur)
+
+        logger.info(
+            "Pedidos atascados detectados: %s",
+            len(pedidos),
+        )
+
         return pedidos
 
     except Exception:
@@ -988,7 +1061,9 @@ def reenviar_notificaciones_pedido(order_id: int) -> Dict[str, Any]:
         raise ValueError(f"No existe el pedido #{order_id}")
 
     pdf_url = (
-        pedido.get("pdf_url")
+        pedido.get("drive_download_link")
+        or pedido.get("pdf_url")
+        or pedido.get("drive_view_link")
         or pedido.get("download_link")
         or pedido.get("link_pdf")
     )

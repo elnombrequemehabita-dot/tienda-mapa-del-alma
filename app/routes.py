@@ -825,12 +825,23 @@ def current_app_password():
 @admin_required
 def admin_pedidos():
     """Bandeja principal: solo pedidos que requieren atención."""
-    atascados = detectar_pedidos_atascados(timeout_minutes=20)
-    if atascados > 0:
+    try:
+        atascados_lista = detectar_pedidos_atascados(timeout_minutes=20)
+        atascados = len(atascados_lista or [])
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("No se pudo revisar pedidos atascados en admin: %s", exc)
+        atascados = 0
         flash(
-            f"Se detectaron {atascados} pedido(s) atascados más de 20 min y se marcaron para revisión manual.",
+            "El panel abrió, pero no se pudo revisar pedidos atascados automáticamente. Revisa logs de Render.",
             "error",
         )
+
+    if atascados > 0:
+        flash(
+            f"Se detectaron {atascados} pedido(s) atascados más de 20 min.",
+            "error",
+        )
+
     rows = database.list_pedidos_por_estados(ADMIN_MAIN_STATES)
     return render_template(
         "admin/pedidos.html",
