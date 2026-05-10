@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Optional
 
 from google.auth.transport.requests import Request
+from google.oauth2 import service_account
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
@@ -40,17 +42,82 @@ def _token_path() -> Path:
     return _default_token_path()
 
 
+def _service_account_json_env() -> str:
+    """
+    JSON completo de la Service Account guardado como variable de entorno.
+
+    Render recomendado:
+    GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON={...json completo...}
+    """
+    return (os.getenv("GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON") or "").strip()
+
+
+def _service_account_path() -> str:
+    """
+    Ruta opcional a archivo JSON de Service Account.
+    """
+    return (os.getenv("GOOGLE_DRIVE_CREDENTIALS_PATH") or "").strip()
+
+
+def _hay_service_account_configurada() -> bool:
+    raw_json = _service_account_json_env()
+    raw_path = _service_account_path()
+    return bool(raw_json or raw_path)
+
+
+def obtener_credenciales_service_account():
+    """
+    Credenciales de Google Drive para producción/Render.
+
+    Prioridad:
+    1. GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON con el JSON completo.
+    2. GOOGLE_DRIVE_CREDENTIALS_PATH con ruta a archivo JSON.
+
+    IMPORTANTE:
+    La carpeta de Drive debe estar compartida con el email client_email
+    de la Service Account.
+    """
+    raw_json = _service_account_json_env()
+
+    if raw_json:
+        try:
+            info = json.loads(raw_json)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                "GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON no contiene JSON válido."
+            ) from exc
+
+        return service_account.Credentials.from_service_account_info(
+            info,
+            scopes=SCOPES,
+        )
+
+    credentials_path = _service_account_path()
+    if credentials_path:
+        path = Path(credentials_path).expanduser().resolve()
+        if not path.exists():
+            raise FileNotFoundError(
+                f"No existe archivo de credenciales Service Account: {path}"
+            )
+
+        return service_account.Credentials.from_service_account_file(
+            str(path),
+            scopes=SCOPES,
+        )
+
+    raise RuntimeError(
+        "No hay credenciales de Google Drive configuradas. "
+        "Configura GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON o GOOGLE_DRIVE_CREDENTIALS_PATH."
+    )
+
+
 def obtener_credenciales_oauth() -> Credentials:
     """
     Obtiene credenciales OAuth para usar Google Drive con la cuenta real de Gmail.
 
-    Primera vez:
-    - Abre navegador.
-    - La usuaria inicia sesión.
-    - Se guarda secrets/google_drive_token.json.
-
-    Siguientes veces:
-    - Reutiliza el token guardado.
+    En local puede abrir navegador la primera vez.
+    En Render/producción NO conviene depender de OAuth local; si no existe
+    el archivo OAuth, se debe usar Service Account.
     """
     client_path = _client_secret_path()
     token_path = _token_path()
@@ -82,8 +149,29 @@ def obtener_credenciales_oauth() -> Credentials:
 
 
 def obtener_servicio_drive_oauth():
-    creds = obtener_credenciales_oauth()
-    return build("drive", "v3", credentials=creds)
+    """
+    Devuelve servicio Google Drive.
+
+    Orden seguro:
+    - Si hay OAuth local disponible, usa OAuth.
+    - Si OAuth no existe y hay Service Account configurada, usa Service Account.
+    - Si no hay nada configurado, falla con mensaje claro.
+    """
+    client_path = _client_secret_path()
+
+    if client_path.exists():
+        creds = obtener_credenciales_oauth()
+        return build("drive", "v3", credentials=creds)
+
+    if _hay_service_account_configurada():
+        creds = obtener_credenciales_service_account()
+        return build("drive", "v3", credentials=creds)
+
+    raise FileNotFoundError(
+        f"No existe OAuth client en {client_path} y tampoco hay Service Account "
+        "configurada. En Render configura GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON "
+        "y GOOGLE_DRIVE_FOLDER_ID."
+    )
 
 
 def probar_conexion_drive_oauth() -> str:
@@ -99,17 +187,15 @@ def probar_conexion_drive_oauth() -> str:
         supportsAllDrives=True,
     ).execute()
 
-    return f"OAuth Google Drive conectado correctamente → Carpeta encontrada: {folder['name']}"
+    return f"Google Drive conectado correctamente → Carpeta encontrada: {folder['name']}"
 
 
 def subir_pdf_a_drive_oauth(pdf_path: str | Path, nombre_archivo: Optional[str] = None) -> dict:
     """
-    Sube un PDF a Google Drive usando OAuth con la cuenta Gmail real.
+    Sube un PDF a Google Drive.
 
-    Devuelve:
-    - file_id
-    - view_link
-    - download_link
+    Conserva el nombre público de la función para no tocar order_services.py,
+    pero ahora funciona también en Render con Service Account.
     """
     service = obtener_servicio_drive_oauth()
 
