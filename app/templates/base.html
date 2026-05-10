@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/celestial.css') }}" />
   </head>
 
-  <body>
+  <body class="page-{{ (request.endpoint or 'general')|replace('.', '-') }}">
     <!-- Fondo celestial premium: azul profundo, estrellas finas y signos zodiacales sutiles -->
     <div class="star-rain celestial-sky" aria-hidden="true">
       <span class="star star-bright">✦</span>
@@ -150,6 +150,13 @@
         />
       </div>
     </footer>
+
+
+    {% if request.endpoint != 'main.pedido' and not (request.endpoint or '').startswith('main.admin') %}
+      <div class="mobile-floating-cta" aria-label="Comprar Mapa del Alma">
+        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">✨ Comprar mi Mapa</a>
+      </div>
+    {% endif %}
 
     <script
       src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
