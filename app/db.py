@@ -195,14 +195,7 @@ def init_db() -> None:
                 drive_file_id TEXT,
                 drive_view_link TEXT,
                 drive_download_link TEXT,
-                drive_uploaded_at TIMESTAMP,
-                drive_expires_at TIMESTAMP,
-                drive_deleted_at TIMESTAMP,
-                drive_status TEXT DEFAULT 'none',
-                drive_delete_error TEXT,
-                processing_lock INTEGER DEFAULT 0,
-                processing_started_at TIMESTAMP,
-                retry_count INTEGER DEFAULT 0,
+                contenido_openai JSONB,
                 error TEXT,
                 creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -246,14 +239,7 @@ def init_db() -> None:
         _add_column_if_missing("pedidos", "drive_file_id", "TEXT")
         _add_column_if_missing("pedidos", "drive_view_link", "TEXT")
         _add_column_if_missing("pedidos", "drive_download_link", "TEXT")
-        _add_column_if_missing("pedidos", "drive_uploaded_at", "TIMESTAMP")
-        _add_column_if_missing("pedidos", "drive_expires_at", "TIMESTAMP")
-        _add_column_if_missing("pedidos", "drive_deleted_at", "TIMESTAMP")
-        _add_column_if_missing("pedidos", "drive_status", "TEXT DEFAULT 'none'")
-        _add_column_if_missing("pedidos", "drive_delete_error", "TEXT")
-        _add_column_if_missing("pedidos", "processing_lock", "INTEGER DEFAULT 0")
-        _add_column_if_missing("pedidos", "processing_started_at", "TIMESTAMP")
-        _add_column_if_missing("pedidos", "retry_count", "INTEGER DEFAULT 0")
+        _add_column_if_missing("pedidos", "contenido_openai", "TEXT", "JSONB")
         _add_column_if_missing("pedidos", "error", "TEXT")
         _add_column_if_missing("pedidos", "actualizado_en", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
 
@@ -275,14 +261,7 @@ def init_db() -> None:
                 drive_file_id TEXT,
                 drive_view_link TEXT,
                 drive_download_link TEXT,
-                drive_uploaded_at TEXT,
-                drive_expires_at TEXT,
-                drive_deleted_at TEXT,
-                drive_status TEXT DEFAULT 'none',
-                drive_delete_error TEXT,
-                processing_lock INTEGER DEFAULT 0,
-                processing_started_at TEXT,
-                retry_count INTEGER DEFAULT 0,
+                contenido_openai TEXT,
                 error TEXT,
                 creado_en TEXT DEFAULT CURRENT_TIMESTAMP,
                 actualizado_en TEXT DEFAULT CURRENT_TIMESTAMP
@@ -325,26 +304,13 @@ def init_db() -> None:
         _add_column_if_missing("pedidos", "drive_file_id", "TEXT")
         _add_column_if_missing("pedidos", "drive_view_link", "TEXT")
         _add_column_if_missing("pedidos", "drive_download_link", "TEXT")
-        _add_column_if_missing("pedidos", "drive_uploaded_at", "TEXT")
-        _add_column_if_missing("pedidos", "drive_expires_at", "TEXT")
-        _add_column_if_missing("pedidos", "drive_deleted_at", "TEXT")
-        _add_column_if_missing("pedidos", "drive_status", "TEXT DEFAULT 'none'")
-        _add_column_if_missing("pedidos", "drive_delete_error", "TEXT")
-        _add_column_if_missing("pedidos", "processing_lock", "INTEGER DEFAULT 0")
-        _add_column_if_missing("pedidos", "processing_started_at", "TEXT")
-        _add_column_if_missing("pedidos", "retry_count", "INTEGER DEFAULT 0")
+        _add_column_if_missing("pedidos", "contenido_openai", "TEXT")
         _add_column_if_missing("pedidos", "error", "TEXT")
         _add_column_if_missing("pedidos", "actualizado_en", "TEXT DEFAULT CURRENT_TIMESTAMP")
 
     _execute("CREATE INDEX IF NOT EXISTS idx_pedidos_estado ON pedidos (estado)")
     _execute("CREATE INDEX IF NOT EXISTS idx_pedidos_email ON pedidos (email)")
     _execute("CREATE INDEX IF NOT EXISTS idx_pedidos_stripe_session_id ON pedidos (stripe_session_id)")
-    _execute("CREATE INDEX IF NOT EXISTS idx_pedidos_drive_expires_at ON pedidos (drive_expires_at)")
-    _execute("CREATE INDEX IF NOT EXISTS idx_pedidos_processing_lock ON pedidos (processing_lock)")
-    try:
-        _execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_pedidos_stripe_session_unique ON pedidos (stripe_session_id) WHERE stripe_session_id IS NOT NULL AND stripe_session_id <> ''")
-    except Exception:
-        logger.warning("No se pudo crear índice único de stripe_session_id; puede existir duplicado histórico.", exc_info=True)
     _execute("CREATE INDEX IF NOT EXISTS idx_resenas_estado ON resenas (estado)")
     _execute("CREATE INDEX IF NOT EXISTS idx_resenas_pedido_id ON resenas (pedido_id)")
     _execute("CREATE INDEX IF NOT EXISTS idx_notificaciones_pedido_id ON notificaciones (pedido_id)")
@@ -487,14 +453,7 @@ def update_pedido_campos(
         "drive_file_id",
         "drive_view_link",
         "drive_download_link",
-        "drive_uploaded_at",
-        "drive_expires_at",
-        "drive_deleted_at",
-        "drive_status",
-        "drive_delete_error",
-        "processing_lock",
-        "processing_started_at",
-        "retry_count",
+        "contenido_openai",
         "error",
     }
 
@@ -598,96 +557,6 @@ def codigo_confirmacion_pedido(pedido_id: int) -> str:
     """
     numero = (int(pedido_id) * 9301 + 49297) % 900000 + 100000
     return f"ALMA-{numero:06d}"
-
-
-# ============================================================
-# Locks / Drive cleanup helpers
-# ============================================================
-
-def acquire_processing_lock(pedido_id: int, stale_after_minutes: int = 45) -> bool:
-    """
-    Bloqueo simple e idempotente para evitar doble procesamiento del mismo pedido.
-    Si un proceso murió y el lock quedó viejo, permite recuperarlo después del tiempo indicado.
-    """
-    stale_after_minutes = max(5, int(stale_after_minutes or 45))
-    if _use_postgres():
-        sql = """
-            UPDATE pedidos
-            SET processing_lock = 1,
-                processing_started_at = CURRENT_TIMESTAMP,
-                retry_count = COALESCE(retry_count, 0) + 1,
-                actualizado_en = CURRENT_TIMESTAMP
-            WHERE id = ?
-              AND (
-                    COALESCE(processing_lock, 0) = 0
-                    OR processing_started_at IS NULL
-                    OR processing_started_at < (CURRENT_TIMESTAMP - (? * INTERVAL '1 minute'))
-                  )
-        """
-        cur = _execute(sql, (int(pedido_id), stale_after_minutes))
-    else:
-        sql = """
-            UPDATE pedidos
-            SET processing_lock = 1,
-                processing_started_at = CURRENT_TIMESTAMP,
-                retry_count = COALESCE(retry_count, 0) + 1,
-                actualizado_en = CURRENT_TIMESTAMP
-            WHERE id = ?
-              AND (
-                    COALESCE(processing_lock, 0) = 0
-                    OR processing_started_at IS NULL
-                    OR datetime(processing_started_at) < datetime('now', ?)
-                  )
-        """
-        cur = _execute(sql, (int(pedido_id), f"-{stale_after_minutes} minutes"))
-    _commit()
-    return int(cur.rowcount or 0) == 1
-
-
-def release_processing_lock(pedido_id: int) -> int:
-    return update_pedido_campos(
-        int(pedido_id),
-        processing_lock=0,
-        processing_started_at=None,
-    )
-
-
-def list_pedidos_drive_expirados(limit: int = 200):
-    return _fetchall(
-        """
-        SELECT *
-        FROM pedidos
-        WHERE drive_file_id IS NOT NULL
-          AND drive_file_id <> ''
-          AND drive_expires_at IS NOT NULL
-          AND drive_status IN ('active', 'uploaded', 'expired', 'delete_error')
-          AND estado IN ('completado', 'pdf_generado', 'enviado')
-          AND drive_expires_at < CURRENT_TIMESTAMP
-        ORDER BY drive_expires_at ASC, id ASC
-        LIMIT ?
-        """,
-        (int(limit),),
-    )
-
-
-def marcar_drive_eliminado(pedido_id: int) -> int:
-    return update_pedido_campos(
-        int(pedido_id),
-        drive_file_id=None,
-        drive_view_link=None,
-        drive_download_link=None,
-        drive_deleted_at=_now_iso(),
-        drive_status='deleted',
-        drive_delete_error=None,
-    )
-
-
-def marcar_drive_delete_error(pedido_id: int, error: str) -> int:
-    return update_pedido_campos(
-        int(pedido_id),
-        drive_status='delete_error',
-        drive_delete_error=str(error)[:2000],
-    )
 
 
 # ============================================================

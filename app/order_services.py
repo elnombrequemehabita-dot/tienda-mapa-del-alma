@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -259,6 +260,72 @@ def _safe_update_pedido(order_id: int, campos: Dict[str, Any]) -> None:
 
     database.update_pedido_campos(int(order_id), clear_error=clear_error, **normalizados)
 
+
+
+def _database_url_is_postgres() -> bool:
+    """Detecta si estamos usando Supabase/PostgreSQL sin depender de funciones privadas de db.py."""
+    url = (os.getenv("DATABASE_URL") or "").strip().lower()
+    return url.startswith("postgresql://") or url.startswith("postgres://")
+
+
+def _json_compacto(data: Any) -> str:
+    """Serializa JSON de forma segura para guardarlo en DB."""
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+
+
+def _guardar_contenido_openai_final_db(order_id: int, contenido: Dict[str, Any]) -> None:
+    """
+    Guarda el JSON FINAL de OpenAI en la tabla pedidos.
+
+    Esto evita depender del disco temporal de Render. Si Render reinicia o haces deploy,
+    el retry puede reutilizar contenido_openai desde Supabase y NO volver a gastar OpenAI.
+
+    Requiere columna:
+    - PostgreSQL/Supabase: contenido_openai JSONB
+    - SQLite/local: contenido_openai TEXT
+    """
+    try:
+        if not isinstance(contenido, dict):
+            return
+
+        valido, motivo = _json_openai_final_valido(contenido)
+        if not valido:
+            logger.warning(
+                "No se guarda contenido_openai pedido #%s porque no es final: %s",
+                order_id,
+                motivo,
+            )
+            return
+
+        payload = _json_compacto(contenido)
+
+        if _database_url_is_postgres():
+            database.execute(
+                """
+                UPDATE pedidos
+                SET contenido_openai = ?::jsonb,
+                    actualizado_en = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (payload, int(order_id)),
+            )
+        else:
+            database.execute(
+                """
+                UPDATE pedidos
+                SET contenido_openai = ?,
+                    actualizado_en = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (payload, int(order_id)),
+            )
+
+        database.commit()
+        logger.info("JSON FINAL OpenAI guardado en DB pedido #%s", order_id)
+
+    except Exception:
+        # No debe romper el flujo: si falla guardar JSON, todavía puede generar/subir PDF.
+        logger.exception("No se pudo guardar contenido_openai en DB pedido #%s", order_id)
 
 def _project_root() -> Path:
     return Path(current_app.root_path).resolve().parent
@@ -591,6 +658,7 @@ def _asegurar_contenido_openai(data_pdf: Dict[str, Any], pedido: Dict[str, Any])
         valido, motivo = _json_openai_final_valido(data_pdf.get("contenido_openai"))
         if valido:
             logger.info("Pedido #%s ya trae contenido_openai FINAL. No se llama OpenAI.", order_id)
+            _guardar_contenido_openai_final_db(order_id, data_pdf.get("contenido_openai"))
             return data_pdf
         logger.warning(
             "Pedido #%s trae contenido_openai incompleto. Se ignorará y se llamará OpenAI: %s",
@@ -605,6 +673,7 @@ def _asegurar_contenido_openai(data_pdf: Dict[str, Any], pedido: Dict[str, Any])
         if valido:
             logger.info("Pedido #%s trae secciones completas. No se llama OpenAI.", order_id)
             data_pdf["contenido_openai"] = candidato
+            _guardar_contenido_openai_final_db(order_id, candidato)
             return data_pdf
         logger.warning(
             "Pedido #%s trae secciones incompletas. Se ignorarán y se llamará OpenAI: %s",
@@ -627,6 +696,7 @@ def _asegurar_contenido_openai(data_pdf: Dict[str, Any], pedido: Dict[str, Any])
         else:
             data_pdf["contenido_openai"] = contenido_guardado
             data_pdf["_reutilizado"] = True
+            _guardar_contenido_openai_final_db(order_id, contenido_guardado)
             return data_pdf
 
     if generar_contenido_mapa is None:
@@ -651,6 +721,8 @@ def _asegurar_contenido_openai(data_pdf: Dict[str, Any], pedido: Dict[str, Any])
             "OpenAI devolvió contenido incompleto. No se genera PDF malo. "
             f"Motivo: {motivo}"
         )
+
+    _guardar_contenido_openai_final_db(order_id, contenido)
 
     data_pdf["contenido_openai"] = contenido
     data_pdf["_reutilizado"] = bool(
