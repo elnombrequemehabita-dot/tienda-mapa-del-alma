@@ -13,6 +13,17 @@ from flask import current_app
 from app import db as database
 from app.db import get_db
 from app.pdf_generator import generar_pdf_desde_tienda
+from app.order_states import (
+    ESTADO_COMPLETADO,
+    ESTADO_ENVIANDO_EMAIL,
+    ESTADO_ERROR_ENVIO,
+    ESTADO_ERROR_GENERACION,
+    ESTADO_GENERANDO_PDF,
+    ESTADO_PAGADO,
+    ESTADO_PDF_GENERADO,
+    ESTADO_PDF_GENERADO_PENDIENTE_DE_LINK,
+    ESTADO_PENDIENTE_PAGO,
+)
 
 try:
     from app.openai_generator import generar_contenido_mapa
@@ -40,14 +51,10 @@ except Exception:
 
 logger = logging.getLogger(__name__)
 
-ESTADO_PENDIENTE_PAGO = "pendiente_pago"
-ESTADO_PAGADO = "pagado"
-ESTADO_GENERANDO_PDF = "generando_pdf"
-ESTADO_PDF_GENERADO = "pdf_generado"
-ESTADO_COMPLETADO = "completado"
-ESTADO_ERROR = "error_generacion"
+ESTADO_ERROR = ESTADO_ERROR_GENERACION
 
 DRIVE_EXPIRACION_HORAS = 72
+LOCK_STALE_MINUTES = 45
 
 
 # =========================================================
@@ -222,7 +229,7 @@ def _safe_update_pedido(order_id: int, campos: Dict[str, Any]) -> None:
     - updated_at / actualizado_en: app.db ya actualiza actualizado_en automáticamente.
     - error_message: se guarda como error.
     - pdf_url: se guarda como drive_download_link, que es la columna real actual.
-    - drive_expires_at: se ignora si la columna no existe en db.py actual.
+    - Campos de Drive/lock se actualizan si existen en db.py corregido.
     """
     if not campos:
         return
@@ -231,7 +238,7 @@ def _safe_update_pedido(order_id: int, campos: Dict[str, Any]) -> None:
     clear_error = False
 
     for col, val in campos.items():
-        if col in {"updated_at", "actualizado_en", "drive_expires_at"}:
+        if col in {"updated_at", "actualizado_en"}:
             continue
         if col == "error_message":
             col = "error"
@@ -653,6 +660,54 @@ def _asegurar_contenido_openai(data_pdf: Dict[str, Any], pedido: Dict[str, Any])
     return data_pdf
 
 
+
+def _adquirir_lock_procesamiento(order_id: int) -> bool:
+    try:
+        if hasattr(database, "acquire_processing_lock"):
+            return bool(database.acquire_processing_lock(int(order_id), stale_after_minutes=LOCK_STALE_MINUTES))
+    except Exception:
+        logger.exception("No se pudo adquirir lock de procesamiento pedido #%s", order_id)
+        return False
+
+    # Fallback defensivo si db.py viejo sigue cargado.
+    try:
+        pedido = obtener_pedido(order_id)
+        if pedido and int(pedido.get("processing_lock") or 0) == 1:
+            return False
+        _safe_update_pedido(order_id, {"processing_lock": 1, "processing_started_at": _iso(_utc_now())})
+        return True
+    except Exception:
+        logger.exception("Fallback lock falló pedido #%s", order_id)
+        return False
+
+
+def _liberar_lock_procesamiento(order_id: int) -> None:
+    try:
+        if hasattr(database, "release_processing_lock"):
+            database.release_processing_lock(int(order_id))
+            return
+        _safe_update_pedido(order_id, {"processing_lock": 0, "processing_started_at": None})
+    except Exception:
+        logger.exception("No se pudo liberar lock de procesamiento pedido #%s", order_id)
+
+
+def _marcar_error_pipeline(order_id: int, estado: str, error: Exception | str) -> None:
+    mensaje = str(error)[:2000]
+    try:
+        _safe_update_pedido(
+            order_id,
+            {
+                "estado": estado,
+                "error": mensaje,
+            },
+        )
+    except Exception:
+        logger.exception("No se pudo marcar error pipeline pedido #%s", order_id)
+
+
+def _error_drive(mensaje: str) -> RuntimeError:
+    return RuntimeError(f"ERROR_DRIVE: {mensaje}")
+
 # =========================================================
 # GOOGLE DRIVE
 # =========================================================
@@ -675,64 +730,37 @@ def _crear_link_local(order_id: int) -> str:
 def _subir_pdf_drive_seguro(
     pdf_path: str,
     order_id: int,
-) -> Optional[Dict[str, Any]]:
+) -> Dict[str, Any]:
 
     if subir_pdf_a_drive_oauth is None:
-        logger.warning("Google Drive OAuth no disponible. Se usará link local.")
-        return None
+        raise _error_drive("Google Drive OAuth no disponible. No se puede entregar link real al cliente.")
 
     archivo = Path(pdf_path)
 
     if not archivo.exists():
-        raise FileNotFoundError(
-            f"No existe el PDF para subir a Drive: {pdf_path}"
-        )
+        raise FileNotFoundError(f"No existe el PDF para subir a Drive: {pdf_path}")
 
     nombre_drive = f"mapa_alma_{order_id}.pdf"
 
-    try:
-        resultado = subir_pdf_a_drive_oauth(
-            str(archivo),
-            nombre_drive,
-        )
+    resultado = subir_pdf_a_drive_oauth(str(archivo), nombre_drive)
 
-        if not isinstance(resultado, dict):
-            raise RuntimeError(
-                f"Respuesta inválida de Drive: {resultado}"
-            )
+    if not isinstance(resultado, dict):
+        raise _error_drive(f"Respuesta inválida de Drive: {resultado}")
 
-        file_id = resultado.get("file_id")
-        download_link = (
-            resultado.get("download_link")
-            or resultado.get("view_link")
-        )
+    file_id = resultado.get("file_id")
+    download_link = resultado.get("download_link") or resultado.get("view_link")
 
-        if not file_id or not download_link:
-            raise RuntimeError(
-                f"Drive no devolvió file_id/download_link: {resultado}"
-            )
+    if not file_id or not download_link:
+        raise _error_drive(f"Drive no devolvió file_id/download_link: {resultado}")
 
-        logger.info(
-            "PDF subido a Drive correctamente. Pedido #%s file_id=%s",
-            order_id,
-            file_id,
-        )
+    logger.info("PDF subido a Drive correctamente. Pedido #%s file_id=%s", order_id, file_id)
 
-        return {
-            "file_id": file_id,
-            "download_link": download_link,
-            "view_link": resultado.get("view_link") or download_link,
-            "name": resultado.get("name") or nombre_drive,
-        }
-
-    except Exception as e:
-        logger.exception(
-            "Error subiendo PDF a Drive pedido #%s: %s",
-            order_id,
-            e,
-        )
-        return None
-
+    return {
+        "file_id": file_id,
+        "download_link": download_link,
+        "view_link": resultado.get("view_link") or download_link,
+        "name": resultado.get("name") or nombre_drive,
+    }
 
 def _pdf_local_existente(pedido: Dict[str, Any], order_id: int) -> Optional[Path]:
     posibles = []
@@ -767,17 +795,18 @@ def _drive_link_vigente(pedido: Dict[str, Any]) -> bool:
     return expires_at > _utc_now()
 
 
-def _guardar_drive_en_db(order_id: int, pdf_path: Path, drive_result: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    expires_at = _utc_now() + timedelta(hours=DRIVE_EXPIRACION_HORAS)
+def _guardar_drive_en_db(order_id: int, pdf_path: Path, drive_result: Dict[str, Any]) -> Dict[str, Any]:
+    if not drive_result:
+        raise _error_drive("No hay resultado de Drive. No se puede guardar entrega.")
 
-    if drive_result:
-        pdf_url = drive_result["download_link"]
-        drive_file_id = drive_result["file_id"]
-        drive_expires_at = _iso(expires_at)
-    else:
-        pdf_url = _crear_link_local(order_id)
-        drive_file_id = None
-        drive_expires_at = None
+    pdf_url = drive_result.get("download_link") or drive_result.get("view_link")
+    drive_file_id = drive_result.get("file_id")
+
+    if not drive_file_id or not pdf_url:
+        raise _error_drive(f"Drive incompleto. file_id/link faltante: {drive_result}")
+
+    uploaded_at = _utc_now()
+    expires_at = uploaded_at + timedelta(hours=DRIVE_EXPIRACION_HORAS)
 
     _safe_update_pedido(
         order_id,
@@ -785,9 +814,14 @@ def _guardar_drive_en_db(order_id: int, pdf_path: Path, drive_result: Optional[D
             "estado": ESTADO_PDF_GENERADO,
             "pdf_path": str(pdf_path),
             "drive_file_id": drive_file_id,
-            "drive_view_link": drive_result.get("view_link") if drive_result else pdf_url,
+            "drive_view_link": drive_result.get("view_link") or pdf_url,
             "drive_download_link": pdf_url,
-            "drive_expires_at": drive_expires_at,
+            "drive_uploaded_at": _iso(uploaded_at),
+            "drive_expires_at": _iso(expires_at),
+            "drive_deleted_at": None,
+            "drive_status": "active",
+            "drive_delete_error": None,
+            "error": None,
         },
     )
 
@@ -797,8 +831,9 @@ def _guardar_drive_en_db(order_id: int, pdf_path: Path, drive_result: Optional[D
         "pdf_path": str(pdf_path),
         "pdf_url": pdf_url,
         "drive_file_id": drive_file_id,
-        "drive_expires_at": drive_expires_at,
-        "drive_usado": bool(drive_file_id),
+        "drive_uploaded_at": _iso(uploaded_at),
+        "drive_expires_at": _iso(expires_at),
+        "drive_usado": True,
     }
 
 
@@ -887,40 +922,23 @@ def _notificar_admin_error(
 
 def generar_pdf_automatico(order_id: int, forzar_regeneracion: bool = False) -> Dict[str, Any]:
     """
-    Flujo seguro y económico:
+    Genera o recupera PDF y SIEMPRE exige Drive real para considerarlo entregable.
 
-    CASO 1:
-    Si ya existe PDF + Drive vigente:
-        NO OpenAI
-        NO PDF nuevo
-        NO subida nueva
-        devuelve lo guardado
-
-    CASO 2:
-    Si ya existe PDF local pero falta Drive:
-        NO OpenAI
-        NO PDF nuevo
-        solo sube PDF existente a Drive
-
-    CASO 3:
-    Si no existe PDF:
-        busca JSON guardado
-        si existe, genera PDF sin llamar OpenAI
-        si no existe, llama OpenAI una sola vez
+    Reglas de producción:
+    - PDF local existente + Drive vigente: reutiliza todo.
+    - PDF local existente sin Drive vigente: NO llama OpenAI; solo reintenta Drive.
+    - Si Drive falla: estado error_envio y NO se completa el pedido.
+    - No hay fallback local para cliente.
     """
 
     pedido = obtener_pedido(order_id)
-
     if not pedido:
         raise ValueError(f"No existe el pedido #{order_id}")
 
     pdf_existente = _pdf_local_existente(pedido, order_id)
 
     if not forzar_regeneracion and pdf_existente and _drive_link_vigente(pedido):
-        logger.info(
-            "Pedido #%s ya tiene PDF y Drive vigente. No se llama OpenAI.",
-            order_id,
-        )
+        logger.info("Pedido #%s ya tiene PDF y Drive vigente. No se llama OpenAI.", order_id)
         return {
             "ok": True,
             "order_id": order_id,
@@ -934,17 +952,17 @@ def generar_pdf_automatico(order_id: int, forzar_regeneracion: bool = False) -> 
         }
 
     if not forzar_regeneracion and pdf_existente:
-        logger.info(
-            "Pedido #%s ya tiene PDF local. Solo se subirá/reparará Drive. No se llama OpenAI.",
-            order_id,
-        )
-
-        drive_result = _subir_pdf_drive_seguro(str(pdf_existente), order_id)
-
-        resultado = _guardar_drive_en_db(order_id, pdf_existente, drive_result)
-        resultado["reutilizado"] = True
-        resultado["sin_openai"] = True
-        return resultado
+        logger.info("Pedido #%s tiene PDF local. Reintentando solo subida Drive.", order_id)
+        try:
+            drive_result = _subir_pdf_drive_seguro(str(pdf_existente), order_id)
+            resultado = _guardar_drive_en_db(order_id, pdf_existente, drive_result)
+            resultado["reutilizado"] = True
+            resultado["sin_openai"] = True
+            return resultado
+        except Exception as exc:
+            _marcar_error_pipeline(order_id, ESTADO_ERROR_ENVIO, exc)
+            _notificar_admin_error(order_id, exc)
+            raise
 
     marcar_estado(order_id, ESTADO_GENERANDO_PDF)
 
@@ -967,34 +985,40 @@ def generar_pdf_automatico(order_id: int, forzar_regeneracion: bool = False) -> 
             pdf_path = str(resultado_pdf)
 
         if not pdf_path:
-            raise RuntimeError(
-                f"El generador PDF no devolvió ruta válida: {resultado_pdf}"
-            )
+            raise RuntimeError(f"El generador PDF no devolvió ruta válida: {resultado_pdf}")
 
         pdf_file = Path(pdf_path)
-
         if not pdf_file.exists():
-            raise FileNotFoundError(
-                f"El PDF generado no existe: {pdf_path}"
-            )
+            raise FileNotFoundError(f"El PDF generado no existe: {pdf_path}")
 
-        drive_result = _subir_pdf_drive_seguro(str(pdf_file), order_id)
+        try:
+            drive_result = _subir_pdf_drive_seguro(str(pdf_file), order_id)
+        except Exception as exc:
+            _safe_update_pedido(
+                order_id,
+                {
+                    "estado": ESTADO_ERROR_ENVIO,
+                    "pdf_path": str(pdf_file),
+                    "drive_status": "upload_error",
+                    "error": str(exc)[:2000],
+                },
+            )
+            _notificar_admin_error(order_id, exc)
+            raise
+
         resultado = _guardar_drive_en_db(order_id, pdf_file, drive_result)
         resultado["reutilizado"] = bool(data_pdf.get("_reutilizado"))
         resultado["sin_openai"] = bool(data_pdf.get("_reutilizado"))
-
         return resultado
 
     except Exception as e:
         _rollback(get_db())
-        marcar_estado(order_id, ESTADO_ERROR, str(e))
+        if str(e).startswith("ERROR_DRIVE"):
+            _marcar_error_pipeline(order_id, ESTADO_ERROR_ENVIO, e)
+        else:
+            _marcar_error_pipeline(order_id, ESTADO_ERROR_GENERACION, e)
         _notificar_admin_error(order_id, e)
-
-        logger.exception(
-            "Error generando PDF pedido #%s",
-            order_id,
-        )
-
+        logger.exception("Error generando/subiendo PDF pedido #%s", order_id)
         raise
 
 
@@ -1010,20 +1034,36 @@ def procesar_post_pago(order_id: int) -> Dict[str, Any]:
 
     estado = pedido.get("estado")
 
+    if estado == ESTADO_COMPLETADO:
+        logger.info("procesar_post_pago omitido: pedido #%s ya está completado.", order_id)
+        return {
+            "ok": True,
+            "omitido": True,
+            "order_id": order_id,
+            "estado": estado,
+            "motivo": "Pedido ya completado",
+        }
+
     estados_validos = {
         ESTADO_PENDIENTE_PAGO,
         ESTADO_PAGADO,
         ESTADO_PDF_GENERADO,
-        ESTADO_COMPLETADO,
+        ESTADO_PDF_GENERADO_PENDIENTE_DE_LINK,
+        ESTADO_ERROR_ENVIO,
+        ESTADO_ERROR_GENERACION,
     }
 
-    if estado not in estados_validos:
-        logger.warning(
-            "procesar_post_pago omitido: pedido #%s estado=%s",
-            order_id,
-            estado,
-        )
+    if estado in {ESTADO_GENERANDO_PDF, ESTADO_ENVIANDO_EMAIL}:
+        return {
+            "ok": False,
+            "omitido": True,
+            "order_id": order_id,
+            "estado": estado,
+            "motivo": "Pedido ya está en proceso",
+        }
 
+    if estado not in estados_validos:
+        logger.warning("procesar_post_pago omitido: pedido #%s estado=%s", order_id, estado)
         return {
             "ok": False,
             "omitido": True,
@@ -1032,30 +1072,46 @@ def procesar_post_pago(order_id: int) -> Dict[str, Any]:
             "motivo": "Estado no procesable",
         }
 
+    if not _adquirir_lock_procesamiento(order_id):
+        logger.warning("procesar_post_pago omitido: pedido #%s bloqueado por otro proceso", order_id)
+        return {
+            "ok": False,
+            "omitido": True,
+            "order_id": order_id,
+            "estado": estado,
+            "motivo": "Pedido bloqueado por procesamiento en curso",
+        }
+
     try:
         logger.info("Procesando post-pago pedido #%s", order_id)
-
-        if estado != ESTADO_COMPLETADO:
-            marcar_estado(order_id, ESTADO_PAGADO)
+        marcar_estado(order_id, ESTADO_PAGADO)
 
         resultado_pdf = generar_pdf_automatico(order_id)
-
         pedido_actualizado = obtener_pedido(order_id) or pedido
 
         pdf_url = resultado_pdf.get("pdf_url") or pedido_actualizado.get("pdf_url")
+        drive_file_id = resultado_pdf.get("drive_file_id") or pedido_actualizado.get("drive_file_id")
+        drive_expires_at = resultado_pdf.get("drive_expires_at") or pedido_actualizado.get("drive_expires_at")
 
-        if not pdf_url:
-            raise RuntimeError(f"No existe pdf_url para pedido #{order_id}")
+        if not pdf_url or not drive_file_id or not drive_expires_at:
+            raise _error_drive(
+                f"Entrega Drive incompleta. pdf_url={bool(pdf_url)} file_id={bool(drive_file_id)} expires={bool(drive_expires_at)}"
+            )
 
-        _enviar_email_cliente_seguro(
-            pedido_actualizado,
-            pdf_url,
-        )
+        marcar_estado(order_id, ESTADO_ENVIANDO_EMAIL)
+
+        try:
+            _enviar_email_cliente_seguro(pedido_actualizado, pdf_url)
+        except Exception as exc:
+            _marcar_error_pipeline(order_id, ESTADO_ERROR_ENVIO, exc)
+            _notificar_admin_error(order_id, exc)
+            raise
 
         _safe_update_pedido(
             order_id,
             {
                 "estado": ESTADO_COMPLETADO,
+                "error": None,
             },
         )
 
@@ -1066,24 +1122,26 @@ def procesar_post_pago(order_id: int) -> Dict[str, Any]:
             "order_id": order_id,
             "estado": ESTADO_COMPLETADO,
             "pdf_url": pdf_url,
-            "drive_file_id": resultado_pdf.get("drive_file_id"),
-            "drive_expires_at": resultado_pdf.get("drive_expires_at"),
-            "drive_usado": resultado_pdf.get("drive_usado"),
+            "drive_file_id": drive_file_id,
+            "drive_expires_at": drive_expires_at,
+            "drive_usado": True,
             "sin_openai": resultado_pdf.get("sin_openai"),
             "reutilizado": resultado_pdf.get("reutilizado"),
         }
 
     except Exception as e:
         _rollback(get_db())
-        marcar_estado(order_id, ESTADO_ERROR, str(e))
+        if str(e).startswith("ERROR_DRIVE"):
+            _marcar_error_pipeline(order_id, ESTADO_ERROR_ENVIO, e)
+        elif obtener_pedido(order_id) and (obtener_pedido(order_id) or {}).get("pdf_path"):
+            _marcar_error_pipeline(order_id, ESTADO_ERROR_ENVIO, e)
+        else:
+            _marcar_error_pipeline(order_id, ESTADO_ERROR_GENERACION, e)
         _notificar_admin_error(order_id, e)
-
-        logger.exception(
-            "Error procesando post pago pedido #%s",
-            order_id,
-        )
-
+        logger.exception("Error procesando post pago pedido #%s", order_id)
         raise
+    finally:
+        _liberar_lock_procesamiento(order_id)
 
 
 # =========================================================
@@ -1130,6 +1188,10 @@ def regenerar_pdf_pedido(order_id: int, forzar_openai: bool = False) -> Dict[str
             "drive_view_link": None,
             "drive_download_link": None,
             "drive_expires_at": None,
+            "drive_uploaded_at": None,
+            "drive_deleted_at": None,
+            "drive_status": "none",
+            "drive_delete_error": None,
             "estado": ESTADO_PAGADO,
         },
     )
@@ -1141,7 +1203,9 @@ def regenerar_pdf_pedido(order_id: int, forzar_openai: bool = False) -> Dict[str
 # PEDIDOS ATASCADOS
 # =========================================================
 
-def detectar_pedidos_atascados(minutos: int = 30) -> List[Dict[str, Any]]:
+def detectar_pedidos_atascados(minutos: int = 30, timeout_minutes: Optional[int] = None) -> List[Dict[str, Any]]:
+    if timeout_minutes is not None:
+        minutos = int(timeout_minutes)
     limite = _utc_now() - timedelta(minutes=minutos)
     limite_iso = _iso(limite)
 
@@ -1192,46 +1256,37 @@ def reenviar_notificaciones_pedido(order_id: int) -> Dict[str, Any]:
     if not pedido:
         raise ValueError(f"No existe el pedido #{order_id}")
 
+    if not _drive_link_vigente(pedido):
+        raise RuntimeError(
+            f"El pedido #{order_id} no tiene un enlace Drive vigente. Usa reintentar post-pago para subir a Drive y enviar."
+        )
+
     pdf_url = (
         pedido.get("pdf_url")
-        or pedido.get("download_link")
-        or pedido.get("link_pdf")
+        or pedido.get("drive_download_link")
+        or pedido.get("drive_view_link")
     )
 
-    if not pdf_url and pedido.get("pdf_path"):
-        pdf_url = _crear_link_local(order_id)
-
     if not pdf_url:
-        raise RuntimeError(
-            f"El pedido #{order_id} no tiene pdf_url ni pdf_path para reenviar."
-        )
+        raise RuntimeError(f"El pedido #{order_id} no tiene link de Drive para reenviar.")
 
     try:
-        _enviar_email_cliente_seguro(
-            pedido,
-            pdf_url,
-        )
+        _enviar_email_cliente_seguro(pedido, pdf_url)
 
-        logger.info(
-            "Notificación reenviada correctamente pedido #%s",
-            order_id,
-        )
+        logger.info("Notificación reenviada correctamente pedido #%s", order_id)
 
         return {
             "ok": True,
+            "cliente": True,
             "order_id": order_id,
             "pdf_url": pdf_url,
             "mensaje": "Notificación reenviada correctamente.",
         }
 
     except Exception as e:
+        _marcar_error_pipeline(order_id, ESTADO_ERROR_ENVIO, e)
         _notificar_admin_error(order_id, e)
-
-        logger.exception(
-            "Error reenviando notificación pedido #%s",
-            order_id,
-        )
-
+        logger.exception("Error reenviando notificación pedido #%s", order_id)
         raise
 
 
