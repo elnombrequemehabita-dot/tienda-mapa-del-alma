@@ -148,20 +148,39 @@
         <div class="product-card mb-3">
           <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">Acciones rápidas</h2>
           <div class="d-grid gap-2">
+
             <form method="post" action="{{ url_for('main.admin_pedido_marcar_pagado', pedido_id=pedido['id']) }}">
-              <button type="submit" class="btn-primary-lg border-0 w-100">Marcar como pagado</button>
+              <button type="submit" class="btn-primary-lg border-0 w-100">
+                Marcar como pagado
+              </button>
             </form>
+
+            <form method="post" action="{{ url_for('main.admin_pedido_reintentar_post_pago', pedido_id=pedido['id']) }}">
+              <button type="submit" class="btn-primary-lg border-0 w-100">
+                Reintentar generación y envío
+              </button>
+            </form>
+
             <form method="post" action="{{ url_for('main.admin_pedido_marcar_revision_manual', pedido_id=pedido['id']) }}">
-              <button type="submit" class="btn-outline w-100">Marcar revisión manual</button>
+              <button type="submit" class="btn-outline w-100">
+                Marcar revisión manual
+              </button>
             </form>
+
             <form method="post" action="{{ url_for('main.admin_pedido_marcar_completado', pedido_id=pedido['id']) }}">
-              <button type="submit" class="btn-outline w-100">Marcar completado</button>
+              <button type="submit" class="btn-outline w-100">
+                Marcar completado
+              </button>
             </form>
+
             {% if can_reenviar_notificaciones %}
               <form method="post" action="{{ url_for('main.admin_pedido_reenviar_notificaciones', pedido_id=pedido['id']) }}">
-                <button type="submit" class="btn-outline w-100">Reenviar notificaciones</button>
+                <button type="submit" class="btn-outline w-100">
+                  Reenviar notificaciones
+                </button>
               </form>
             {% endif %}
+
           </div>
         </div>
 
