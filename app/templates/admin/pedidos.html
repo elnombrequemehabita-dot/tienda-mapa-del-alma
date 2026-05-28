@@ -29,6 +29,13 @@
           Impresos
         </a>
         <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_resenas') }}">Reseñas</a>
+        <form
+          method="post"
+          action="{{ url_for('main.admin_limpiar_drive_expirados') }}"
+          onsubmit="return confirm('¿Limpiar ahora PDFs vencidos de Google Drive?');"
+        >
+          <button class="btn-outline btn-sm py-2" type="submit">Limpiar Drive</button>
+        </form>
         <a class="btn-outline btn-sm py-2" href="{{ url_for('main.index') }}">Tienda</a>
         <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_logout') }}">Salir</a>
       </div>

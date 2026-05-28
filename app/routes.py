@@ -4,7 +4,10 @@ Rutas HTTP de la tienda: inicio, pedido, gracias y panel admin.
 from __future__ import annotations
 
 import logging
+import hmac
 import os
+import secrets
+import time
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
@@ -28,6 +31,7 @@ from flask import (
 )
 
 from app import db as database
+from app.download_token import pedido_id_desde_token_descarga
 from app import email_service
 from app.print_files import (
     create_hardcover_cover_parts,
@@ -89,6 +93,11 @@ from app.order_states import (
 bp = Blueprint("main", __name__)
 logger = logging.getLogger(__name__)
 
+CSRF_SESSION_KEY = "_admin_csrf_token"
+ADMIN_LOGIN_ATTEMPTS: dict[str, list[float]] = {}
+ADMIN_LOGIN_WINDOW_SECONDS = 15 * 60
+ADMIN_LOGIN_MAX_ATTEMPTS = 8
+
 REVIEW_ALLOWED_STATES = (
     ESTADO_COMPLETADO,
     ESTADO_PDF_ENTREGADO,
@@ -137,6 +146,62 @@ DELETABLE_STATES = (
     ESTADO_REVISION_MANUAL,
     ESTADO_NEEDS_ADMIN_REVIEW,
 )
+
+
+def _csrf_token() -> str:
+    token = session.get(CSRF_SESSION_KEY)
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session[CSRF_SESSION_KEY] = token
+    return str(token)
+
+
+@bp.context_processor
+def _inject_security_helpers():
+    return {"csrf_token": _csrf_token}
+
+
+@bp.before_request
+def _protect_admin_post_csrf():
+    endpoint = request.endpoint or ""
+    if request.method != "POST" or not endpoint.startswith("main.admin"):
+        return None
+
+    expected = session.get(CSRF_SESSION_KEY)
+    provided = request.form.get("_csrf_token") or request.headers.get("X-CSRF-Token") or ""
+    if not expected or not hmac.compare_digest(str(expected), str(provided)):
+        logger.warning(
+            "ADMIN_CSRF_REJECTED endpoint=%s ip=%s",
+            endpoint,
+            _client_ip(),
+        )
+        abort(400, description="Solicitud de administración inválida o expirada. Recarga la página e inténtalo de nuevo.")
+    return None
+
+
+def _client_ip() -> str:
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip()
+    return request.remote_addr or "unknown"
+
+
+def _admin_login_is_limited(ip: str) -> bool:
+    now = time.time()
+    attempts = [ts for ts in ADMIN_LOGIN_ATTEMPTS.get(ip, []) if now - ts < ADMIN_LOGIN_WINDOW_SECONDS]
+    ADMIN_LOGIN_ATTEMPTS[ip] = attempts
+    return len(attempts) >= ADMIN_LOGIN_MAX_ATTEMPTS
+
+
+def _record_admin_login_failure(ip: str) -> None:
+    now = time.time()
+    attempts = [ts for ts in ADMIN_LOGIN_ATTEMPTS.get(ip, []) if now - ts < ADMIN_LOGIN_WINDOW_SECONDS]
+    attempts.append(now)
+    ADMIN_LOGIN_ATTEMPTS[ip] = attempts[-ADMIN_LOGIN_MAX_ATTEMPTS:]
+
+
+def _clear_admin_login_failures(ip: str) -> None:
+    ADMIN_LOGIN_ATTEMPTS.pop(ip, None)
 
 
 def admin_required(view):
@@ -402,6 +467,7 @@ def _crear_checkout_desde_form():
         # Nombre `checkout_session`: no usar `session` (choca con la sesión de Flask).
         checkout_session = stripe.checkout.Session.create(
             mode="payment",
+            client_reference_id=str(nuevo_id),
             # Evita crear Customer de Stripe salvo que haga falta (menos “recordar” tarjeta en cuenta Stripe).
             customer_creation="if_required",
             # Solo tarjeta: no activa Link como método explícito (el “guardar para después” suele venir de Link / navegador).
@@ -746,6 +812,12 @@ def _sincronizar_post_pago_desde_return_stripe(pedido_id: int, stripe_session_id
     if str(pedido_id) != str(meta):
         return
 
+    database.update_pedido_campos(
+        pedido_id,
+        stripe_session_id=stripe_session_id,
+        stripe_payment_intent=data.get("payment_intent"),
+    )
+
     row = database.get_pedido_by_id(pedido_id)
     if row is None:
         return
@@ -884,8 +956,25 @@ def gracias():
 @bp.route("/descarga/<int:pedido_id>")
 def descarga_pdf(pedido_id: int):
     """
-    Descarga local del PDF generado para revisión interna y entrega manual.
+    Descarga local del PDF generado.
+
+    Seguridad:
+    - El admin puede entrar con sesión iniciada.
+    - El cliente solo puede entrar con token firmado y temporal.
+    - Sin token, el número de pedido ya no sirve para descargar PDFs privados.
     """
+    if not session.get("admin_ok"):
+        token = (request.args.get("token") or "").strip()
+        token_order_id = pedido_id_desde_token_descarga(token, current_app.secret_key)
+        if token_order_id != int(pedido_id):
+            logger.warning(
+                "LOCAL_DOWNLOAD_REJECTED pedido_id=%s ip=%s has_token=%s",
+                pedido_id,
+                _client_ip(),
+                bool(token),
+            )
+            abort(403, description="Este enlace de descarga no es válido o ya expiró.")
+
     pdf_path = _ruta_pdf_local(pedido_id)
     if not pdf_path.exists() or not pdf_path.is_file():
         abort(404, description=f"No existe PDF generado para el pedido #{pedido_id}.")
@@ -1056,6 +1145,17 @@ def _resolve_pedido_id_from_checkout_session(session_data: dict) -> Optional[int
         if row is not None:
             return from_meta
 
+    raw_ref = session_data.get("client_reference_id") or ""
+    try:
+        from_ref = int(raw_ref)
+    except (TypeError, ValueError):
+        from_ref = 0
+
+    if from_ref > 0:
+        row = database.get_pedido_by_id(from_ref)
+        if row is not None:
+            return from_ref
+
     email = _stripe_session_customer_email(session_data)
     if not email:
         return None
@@ -1120,6 +1220,11 @@ def stripe_webhook():
         pedido_id = _resolve_pedido_id_from_checkout_session(session_data)
         if pedido_id is None:
             return "", 200
+        database.update_pedido_campos(
+            pedido_id,
+            stripe_session_id=str(session_data.get("id") or ""),
+            stripe_payment_intent=session_data.get("payment_intent"),
+        )
         procesar_post_pago(pedido_id)
     except Exception as exc:  # noqa: BLE001
         logger.error("Webhook Stripe error en post-pago: %s", exc)
@@ -1130,14 +1235,26 @@ def stripe_webhook():
 @bp.route("/admin", methods=["GET", "POST"])
 def admin_login():
     """
-    Acceso simple al panel: contraseña configurada en FLASK_ADMIN_PASSWORD
-    (por defecto en desarrollo: admin123 — cámbiala).
+    Acceso al panel: contraseña obligatoria configurada en FLASK_ADMIN_PASSWORD.
     """
     if request.method == "POST":
+        ip = _client_ip()
+        if _admin_login_is_limited(ip):
+            logger.warning("ADMIN_LOGIN_RATE_LIMIT ip=%s", ip)
+            abort(429, description="Demasiados intentos. Espera unos minutos y vuelve a intentarlo.")
+
+        expected_password = current_app_password()
+        if not expected_password:
+            logger.error("ADMIN_LOGIN_DISABLED: FLASK_ADMIN_PASSWORD no configurado.")
+            abort(503, description="Panel admin no configurado.")
+
         pwd = request.form.get("password") or ""
-        if pwd == current_app_password():
+        if pwd == expected_password:
+            _clear_admin_login_failures(ip)
             session["admin_ok"] = True
             return redirect(url_for("main.admin_pedidos"))
+        _record_admin_login_failure(ip)
+        logger.warning("ADMIN_LOGIN_FAILED ip=%s", ip)
         flash("Contraseña incorrecta.", "error")
     return render_template("admin/login.html")
 
@@ -1181,6 +1298,35 @@ def admin_pedidos():
         current_tab="pedidos",
         codigo_confirmacion_pedido=database.codigo_confirmacion_pedido,
     )
+
+
+@bp.route("/admin/mantenimiento/limpiar-drive-expirados", methods=["POST"])
+@admin_required
+def admin_limpiar_drive_expirados():
+    """Ejecuta manualmente la limpieza de PDFs vencidos en Google Drive."""
+    try:
+        from scripts.limpiar_drive_expirados import limpiar_drive_expirados
+
+        resultado = limpiar_drive_expirados(limit=200, enviar_resumen=False)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Limpieza manual Drive falló desde admin: %s", exc)
+        flash(f"No se pudo limpiar Drive: {exc}", "error")
+        return redirect(url_for("main.admin_pedidos"))
+
+    eliminados = int(resultado.get("eliminados") or 0)
+    ya_no = int(resultado.get("ya_no_existian") or 0)
+    fallidos = int(resultado.get("fallidos") or 0)
+    if fallidos:
+        flash(
+            f"Limpieza Drive ejecutada con errores: eliminados {eliminados}, ya no existían {ya_no}, fallidos {fallidos}.",
+            "error",
+        )
+    else:
+        flash(
+            f"Limpieza Drive completada: eliminados {eliminados}, ya no existían {ya_no}.",
+            "success",
+        )
+    return redirect(url_for("main.admin_pedidos"))
 
 
 @bp.route("/admin/completados")

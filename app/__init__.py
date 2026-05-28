@@ -172,6 +172,7 @@ def create_app():
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         PREFERRED_URL_SCHEME="https" if session_cookie_secure else "http",
+        MAX_CONTENT_LENGTH=_int_env("MAX_CONTENT_LENGTH", 1_000_000),
     )
 
     if _bool_env("ENFORCE_HTTPS", False):
@@ -194,11 +195,15 @@ def create_app():
             )
             return response
 
-    secret_key = (
-        os.getenv("SECRET_KEY")
-        or os.getenv("FLASK_SECRET_KEY")
-        or "dev-secret-key-change-me"
-    )
+    secret_key = os.getenv("SECRET_KEY") or os.getenv("FLASK_SECRET_KEY")
+    if not secret_key:
+        if app.debug or _bool_env("ALLOW_DEV_SECRET_KEY", False):
+            secret_key = "dev-secret-key-change-me"
+            logger.warning("Usando SECRET_KEY de desarrollo. No usar esto en producción.")
+        else:
+            raise RuntimeError(
+                "Falta SECRET_KEY/FLASK_SECRET_KEY. Por seguridad la app no arranca sin clave secreta."
+            )
 
     app.config["SECRET_KEY"] = secret_key
     app.config["ADMIN_PASSWORD"] = os.getenv(

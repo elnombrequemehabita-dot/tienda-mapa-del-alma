@@ -492,6 +492,45 @@ def check_routes() -> None:
     _ok("rutas publicas/admin")
 
 
+def check_security_guards() -> None:
+    from app import create_app
+    from app.download_token import token_para_descarga
+
+    app = create_app()
+    client = app.test_client()
+
+    pedido_id = 777001
+    pdf_path = PROJECT_ROOT / "output" / f"mapa_alma_{pedido_id}.pdf"
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+    pdf_path.write_bytes(b"%PDF-1.4\n% smoke\n%%EOF\n")
+
+    no_token = client.get(f"/descarga/{pedido_id}")
+    if no_token.status_code != 403:
+        raise SystemExit(f"[FAIL] descarga sin token devolvio {no_token.status_code}, esperaba 403")
+
+    token = token_para_descarga(pedido_id, app.secret_key)
+    with_token = client.get(f"/descarga/{pedido_id}?token={token}")
+    if with_token.status_code != 200:
+        raise SystemExit(f"[FAIL] descarga con token devolvio {with_token.status_code}, esperaba 200")
+
+    with client.session_transaction() as session:
+        session["_admin_csrf_token"] = "smoke-csrf"
+
+    bad_csrf = client.post("/admin", data={"password": "incorrecta"}, follow_redirects=False)
+    if bad_csrf.status_code != 400:
+        raise SystemExit(f"[FAIL] admin POST sin CSRF devolvio {bad_csrf.status_code}, esperaba 400")
+
+    ok_csrf = client.post(
+        "/admin",
+        data={"password": "incorrecta", "_csrf_token": "smoke-csrf"},
+        follow_redirects=False,
+    )
+    if ok_csrf.status_code not in {200, 302}:
+        raise SystemExit(f"[FAIL] admin POST con CSRF devolvio {ok_csrf.status_code}")
+
+    _ok("seguridad rutas", "descarga firmada y CSRF admin")
+
+
 def check_pdf_generation() -> None:
     from app.pdf_generator import generar_pdf_desde_tienda
     from pypdf import PdfReader
@@ -555,6 +594,7 @@ def main() -> int:
     check_checkout_printed_product()
     check_checkout_printed_international_block()
     check_routes()
+    check_security_guards()
     check_pdf_generation()
     print("[OK] smoke check completo")
     return 0

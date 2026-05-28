@@ -9,6 +9,7 @@ instance/
 *.pdf
 *.sqlite
 *.db
+lomo_mixam_*.png
 app/assets_backup/
 node_modules/
 tmp/

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Iterable
@@ -106,6 +107,28 @@ def check_core_env(strict_live: bool) -> None:
         _ok("TRUSTED_PROXY_COUNT", "1")
     else:
         _warn("TRUSTED_PROXY_COUNT", "en Render debe ser 1")
+
+    max_content = _env("MAX_CONTENT_LENGTH") or "1000000"
+    try:
+        max_content_int = int(max_content)
+    except ValueError:
+        _fail("MAX_CONTENT_LENGTH", "debe ser número")
+    else:
+        if max_content_int < 100_000:
+            _warn("MAX_CONTENT_LENGTH", "muy bajo; puede bloquear formularios normales")
+        else:
+            _ok("MAX_CONTENT_LENGTH", str(max_content_int))
+
+    token_hours = _env("PDF_DOWNLOAD_TOKEN_MAX_AGE_HOURS") or "72"
+    try:
+        token_hours_int = int(token_hours)
+    except ValueError:
+        _fail("PDF_DOWNLOAD_TOKEN_MAX_AGE_HOURS", "debe ser número")
+    else:
+        if token_hours_int > 168:
+            _warn("PDF_DOWNLOAD_TOKEN_MAX_AGE_HOURS", "recomendado 168 horas o menos")
+        else:
+            _ok("PDF_DOWNLOAD_TOKEN_MAX_AGE_HOURS", f"{token_hours_int}h")
 
 
 def check_stripe(strict_live: bool) -> None:
@@ -260,6 +283,42 @@ def check_assets() -> None:
             _ok("logo.png", f"{size_mb:.2f} MB")
 
 
+def check_repo_hygiene() -> None:
+    gitignore = PROJECT_ROOT / ".gitignore"
+    text = gitignore.read_text(encoding="utf-8", errors="ignore") if gitignore.exists() else ""
+    for pattern in ("instance/", "*.sqlite", ".env", "secrets/"):
+        if pattern in text:
+            _ok(f".gitignore {pattern}", "protegido")
+        else:
+            _fail(".gitignore", f"falta {pattern}")
+
+    try:
+        completed = subprocess.run(
+            ["git", "ls-files"],
+            cwd=PROJECT_ROOT,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        _warn("Git hygiene", f"no se pudo revisar git ls-files: {exc}")
+        return
+
+    tracked = set(completed.stdout.splitlines())
+    risky = sorted(
+        path
+        for path in tracked
+        if path == ".env"
+        or path.startswith("secrets/")
+        or path.startswith("instance/")
+        or path.endswith((".sqlite", ".sqlite3"))
+    )
+    if risky:
+        _fail("Archivos privados versionados", ", ".join(risky[:8]))
+    else:
+        _ok("Archivos privados versionados", "ninguno")
+
+
 def check_app_routes() -> None:
     from app import create_app
 
@@ -330,6 +389,7 @@ def main() -> int:
     check_email()
     check_drive(strict_live=args.strict_live)
     check_assets()
+    check_repo_hygiene()
     check_app_routes()
     if args.external:
         check_external_services()

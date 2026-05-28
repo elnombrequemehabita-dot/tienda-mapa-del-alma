@@ -56,7 +56,7 @@ Tienda web para tu producto digital **Mapa del Alma**: página de inicio, formul
 8. **Abrir el navegador**
 
    - Tienda: [http://127.0.0.1:5000/](http://127.0.0.1:5000/)
-   - Admin: [http://127.0.0.1:5000/admin](http://127.0.0.1:5000/admin) (por defecto la contraseña es `admin123` si no defines `FLASK_ADMIN_PASSWORD`)
+   - Admin: [http://127.0.0.1:5000/admin](http://127.0.0.1:5000/admin). Define siempre `FLASK_ADMIN_PASSWORD`.
 
 9. **Parar el servidor**: `Ctrl + C`
 
@@ -141,9 +141,34 @@ Tienda_El_Nombre_Que_Me_Habita/
 
 - Crea tu `.env` desde `.env.example` y completa todos los valores reales.
 - Usa `SECRET_KEY` y `FLASK_ADMIN_PASSWORD` fuertes y únicos.
+- La app no arranca en producción sin `SECRET_KEY`.
+- El panel admin protege formularios con CSRF y limita intentos fallidos de login.
+- La descarga local `/descarga/<pedido>` exige token firmado; Google Drive sigue siendo la entrega principal.
+- No subas `.env`, `secrets/`, `instance/` ni bases `.sqlite` a GitHub.
 - HTTPS y servidor WSGI adecuado para producción.
 - Si vas detrás de HTTPS, define `SESSION_COOKIE_SECURE=1` en `.env`.
-- Valora protección **CSRF** en formularios (Flask-WTF) cuando la web sea pública.
+- Antes de vender, ejecuta:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\production_check.py --external
+```
+
+- Para una revisión estricta de venta real con Stripe live:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\production_check.py --strict-live --external
+```
+
+## Mantenimiento
+
+Los enlaces de Google Drive expiran a las 72 horas. Para limpiar PDFs vencidos:
+
+- Desde admin: botón **Limpiar Drive** en la pestaña Pedidos.
+- Desde consola/cron:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\limpiar_drive_expirados.py
+```
 
 ## Arranque recomendado en producción
 

@@ -5,6 +5,15 @@ secrets/
 # Output
 output/
 *.pdf
+lomo_mixam_*.png
+
+# Bases de datos locales y datos privados de desarrollo
+instance/
+*.sqlite
+*.sqlite3
+
+# Entorno virtual local
+.venv/
 
 # Python
 __pycache__/

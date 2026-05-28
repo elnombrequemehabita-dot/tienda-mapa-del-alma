@@ -15,6 +15,7 @@ from flask import current_app
 
 from app import db as database
 from app.db import get_db
+from app.download_token import token_para_descarga
 from app.pdf_generator import generar_pdf_desde_tienda
 from app.order_states import (
     ESTADO_COMPLETADO,
@@ -1166,10 +1167,11 @@ def _crear_link_local(order_id: int) -> str:
 
     base_url = str(base_url).rstrip("/")
 
+    token = token_para_descarga(int(order_id), current_app.secret_key)
     if base_url:
-        return f"{base_url}/descarga/{order_id}"
+        return f"{base_url}/descarga/{order_id}?token={token}"
 
-    return f"/descarga/{order_id}"
+    return f"/descarga/{order_id}?token={token}"
 
 
 def _subir_pdf_drive_seguro(

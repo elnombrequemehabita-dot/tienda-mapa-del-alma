@@ -19,6 +19,12 @@ services:
         value: "0"
       - key: HSTS_MAX_AGE
         value: "15552000"
+      - key: MAX_CONTENT_LENGTH
+        value: "1000000"
+      - key: PDF_DOWNLOAD_TOKEN_MAX_AGE_HOURS
+        value: "72"
+      - key: ALLOW_DEV_SECRET_KEY
+        value: "0"
       - key: OPENAI_MODEL
         value: gpt-4o-mini
       - key: OPENAI_ENABLE_REAL_ORDERS
