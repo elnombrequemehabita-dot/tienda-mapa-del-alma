@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Analíticas · Admin{% endblock %}
+{% block content %}
+  <section class="py-4 py-md-5">
+    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-md-between gap-3 mb-3">
+      <div>
+        <h1 class="section-title mb-1">Analíticas</h1>
+        <p class="text-muted small mb-0">Visitas, intención de compra, pedidos pagados y ganancia estimada real.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_pedidos') }}">Pedidos</a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_completados') }}">Completados</a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_impresos') }}">Impresos</a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_resenas') }}">Reseñas</a>
+        <a class="btn-outline btn-sm py-2 active-admin-tab" href="{{ url_for('main.admin_analiticas') }}">Analíticas</a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.index') }}">Tienda</a>
+      </div>
+    </div>
+
+    <div class="product-card mb-3">
+      <form class="d-flex flex-column flex-md-row align-items-md-end gap-2" method="get" action="{{ url_for('main.admin_analiticas') }}">
+        <div>
+          <label class="form-label" for="dias">Rango</label>
+          <select class="form-select form-select-mystic" id="dias" name="dias">
+            {% for n in [7, 14, 30, 60, 90] %}
+              <option value="{{ n }}" {% if resumen.days == n %}selected{% endif %}>Últimos {{ n }} días</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button class="btn-primary-lg border-0" type="submit">Actualizar</button>
+      </form>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-6 col-lg-3">
+        <div class="product-card h-100">
+          <p class="small text-muted mb-1">Visitantes únicos</p>
+          <p class="h3 mb-0">{{ resumen.totals.unique_visitors }}</p>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="product-card h-100">
+          <p class="small text-muted mb-1">Entradas a pedido</p>
+          <p class="h3 mb-0">{{ resumen.totals.pedido_views }}</p>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="product-card h-100">
+          <p class="small text-muted mb-1">Checkouts iniciados</p>
+          <p class="h3 mb-0">{{ resumen.totals.checkout_started }}</p>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="product-card h-100">
+          <p class="small text-muted mb-1">Pedidos pagados</p>
+          <p class="h3 mb-0">{{ resumen.totals.paid_orders }}</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-lg-4">
+        <div class="product-card h-100">
+          <p class="small text-muted mb-1">Ventas brutas</p>
+          <p class="h4 mb-0">{{ resumen.totals.gross_usd }}</p>
+        </div>
+      </div>
+      <div class="col-12 col-lg-4">
+        <div class="product-card h-100">
+          <p class="small text-muted mb-1">Costos registrados</p>
+          <p class="h4 mb-0">{{ resumen.totals.total_cost_usd }}</p>
+        </div>
+      </div>
+      <div class="col-12 col-lg-4">
+        <div class="product-card h-100">
+          <p class="small text-muted mb-1">Ganancia neta estimada</p>
+          <p class="h4 mb-0">{{ resumen.totals.net_usd }}</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="product-card mb-3">
+      <p class="small text-muted mb-2">
+        Conversión visita a compra: <strong>{{ resumen.totals.visit_to_paid_rate }}%</strong>.
+        Conversión checkout a compra: <strong>{{ resumen.totals.checkout_to_paid_rate }}%</strong>.
+      </p>
+      <p class="small text-muted mb-0">{{ resumen.stripe_fee_note }}</p>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table-mystic">
+        <thead>
+          <tr>
+            <th>Día</th>
+            <th>Vistas</th>
+            <th>Visitantes</th>
+            <th>Pedido</th>
+            <th>Checkout</th>
+            <th>Pagados</th>
+            <th>Conv.</th>
+            <th>Bruto</th>
+            <th>Stripe</th>
+            <th>OpenAI</th>
+            <th>Impresión</th>
+            <th>Envío</th>
+            <th>Neto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in resumen.rows %}
+            <tr>
+              <td class="mono-small">{{ row.date }}</td>
+              <td>{{ row.page_views }}</td>
+              <td>{{ row.unique_visitors }}</td>
+              <td>{{ row.pedido_views }}</td>
+              <td>{{ row.checkout_started }}</td>
+              <td>{{ row.paid_orders }}</td>
+              <td>{{ row.visit_to_paid_rate }}%</td>
+              <td class="mono-small">{{ row.gross_usd }}</td>
+              <td class="mono-small">{{ row.stripe_fee_usd }}</td>
+              <td class="mono-small">{{ row.openai_cost_usd }}</td>
+              <td class="mono-small">{{ row.print_cost_usd }}</td>
+              <td class="mono-small">{{ row.shipping_cost_usd }}</td>
+              <td class="mono-small">{{ row.net_usd }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="product-card mt-3">
+      <p class="small text-muted mb-0">
+        Para medir el link de tu perfil con más precisión, usa este enlace en Instagram/TikTok:
+        <span class="mono-small text-break">{{ url_for('main.index', utm_source='perfil', utm_medium='bio', _external=True) }}</span>
+      </p>
+    </div>
+  </section>
+{% endblock %}

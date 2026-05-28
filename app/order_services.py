@@ -1744,6 +1744,12 @@ def registrar_envio_pedido(order_id: int, tracking_number: str, shipping_carrier
         ESTADO_ENVIADO,
         tracking_number=tracking,
         shipping_carrier=carrier,
+        tracking_status="enviado",
+        tracking_url=database.tracking_url_for_carrier(carrier, tracking)
+        if hasattr(database, "tracking_url_for_carrier")
+        else "",
+        tracking_last_checked_at=shipped_at,
+        tracking_last_event="Tracking registrado en admin",
         shipped_at=shipped_at,
         error=None,
     )
@@ -1786,7 +1792,14 @@ def marcar_pedido_entregado(order_id: int) -> Dict[str, Any]:
     if not _es_pedido_impreso(pedido):
         raise ValueError("Este pedido no es de libro impreso.")
 
-    actualizado = _actualizar_estado_audit(order_id, ESTADO_ENTREGADO, error=None)
+    actualizado = _actualizar_estado_audit(
+        order_id,
+        ESTADO_ENTREGADO,
+        tracking_status="entregado",
+        tracking_last_checked_at=_iso(_utc_now()),
+        tracking_last_event="Marcado como entregado en admin",
+        error=None,
+    )
     return {
         "ok": True,
         "order_id": order_id,

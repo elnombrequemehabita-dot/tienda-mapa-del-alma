@@ -41,6 +41,10 @@
           Reseñas
         </a>
 
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_analiticas') }}">
+          Analíticas
+        </a>
+
         <a class="btn-outline btn-sm py-2" href="{{ url_for('main.index') }}">
           Tienda
         </a>
@@ -235,6 +239,16 @@
 
               <dt class="col-sm-4 text-muted">Tracking</dt>
               <dd class="col-sm-8 mono-small text-break">{{ pedido["tracking_number"] or "—" }}</dd>
+
+              <dt class="col-sm-4 text-muted">Estado tracking</dt>
+              <dd class="col-sm-8">{{ pedido["tracking_status"] or "—" }}</dd>
+
+              {% if pedido["tracking_url"] %}
+                <dt class="col-sm-4 text-muted">Rastreo</dt>
+                <dd class="col-sm-8">
+                  <a href="{{ pedido['tracking_url'] }}" target="_blank" rel="noopener noreferrer">Abrir web del transportista</a>
+                </dd>
+              {% endif %}
             </dl>
           </div>
         {% endif %}
@@ -294,6 +308,69 @@
               </table>
             </div>
           {% endif %}
+        </div>
+
+        <div class="product-card mb-3">
+          <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">
+            Finanzas / ganancia real
+          </h2>
+
+          <dl class="row mb-3 small">
+            <dt class="col-sm-5 text-muted">Cobrado al cliente</dt>
+            <dd class="col-sm-7 mono-small">{{ pedido["financial_summary"]["gross_usd"] }}</dd>
+
+            <dt class="col-sm-5 text-muted">Comisión Stripe</dt>
+            <dd class="col-sm-7 mono-small">
+              {{ pedido["financial_summary"]["stripe_fee_usd"] }}
+              {% if pedido["financial_summary"]["stripe_fee_source"] %}<span class="text-muted">({{ pedido["financial_summary"]["stripe_fee_source"] }})</span>{% endif %}
+            </dd>
+
+            <dt class="col-sm-5 text-muted">OpenAI</dt>
+            <dd class="col-sm-7 mono-small">{{ pedido["financial_summary"]["openai_cost_usd"] }}</dd>
+
+            <dt class="col-sm-5 text-muted">Impresión</dt>
+            <dd class="col-sm-7 mono-small">{{ pedido["financial_summary"]["print_cost_usd"] }}</dd>
+
+            <dt class="col-sm-5 text-muted">Envío</dt>
+            <dd class="col-sm-7 mono-small">{{ pedido["financial_summary"]["shipping_cost_usd"] }}</dd>
+
+            <dt class="col-sm-5 text-muted">Costos totales</dt>
+            <dd class="col-sm-7 mono-small">{{ pedido["financial_summary"]["total_cost_usd"] }}</dd>
+
+            <dt class="col-sm-5 text-muted">Ganancia neta</dt>
+            <dd class="col-sm-7 mono-small"><strong>{{ pedido["financial_summary"]["net_usd"] }}</strong></dd>
+          </dl>
+
+          <form method="post" action="{{ url_for('main.admin_pedido_finanzas', pedido_id=pedido['id']) }}">
+            <input type="hidden" name="tab" value="{{ current_tab }}" />
+            <div class="row g-2">
+              <div class="col-6">
+                <label class="form-label" for="stripe-fee">Stripe USD</label>
+                <input class="form-control" id="stripe-fee" name="stripe_fee_usd" value="{{ '%.2f'|format((pedido['financial_summary']['stripe_fee_centavos'] or 0) / 100) }}" inputmode="decimal" />
+              </div>
+              <div class="col-6">
+                <label class="form-label" for="print-cost">Impresión USD</label>
+                <input class="form-control" id="print-cost" name="print_cost_usd" value="{{ '%.2f'|format((pedido['print_cost_centavos'] or 0) / 100) }}" inputmode="decimal" />
+              </div>
+              <div class="col-6">
+                <label class="form-label" for="shipping-cost">Envío USD</label>
+                <input class="form-control" id="shipping-cost" name="shipping_cost_usd" value="{{ '%.2f'|format((pedido['shipping_cost_centavos'] or 0) / 100) }}" inputmode="decimal" />
+              </div>
+              <div class="col-6">
+                <label class="form-label" for="packaging-cost">Empaque USD</label>
+                <input class="form-control" id="packaging-cost" name="packaging_cost_usd" value="{{ '%.2f'|format((pedido['packaging_cost_centavos'] or 0) / 100) }}" inputmode="decimal" />
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="other-cost">Otros costos USD</label>
+                <input class="form-control" id="other-cost" name="other_cost_usd" value="{{ '%.2f'|format((pedido['other_cost_centavos'] or 0) / 100) }}" inputmode="decimal" />
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="financial-notes">Notas internas</label>
+                <textarea class="form-control" id="financial-notes" name="financial_notes" rows="2">{{ pedido["financial_notes"] }}</textarea>
+              </div>
+            </div>
+            <button type="submit" class="btn-primary-lg border-0 w-100 mt-3">Guardar costos</button>
+          </form>
         </div>
 
       </div>

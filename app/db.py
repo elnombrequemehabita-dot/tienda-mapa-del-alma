@@ -4,6 +4,7 @@ import logging
 import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Optional
+from urllib.parse import quote_plus
 
 from flask import current_app, g
 
@@ -34,7 +35,16 @@ def _env_int(name: str, default: int) -> int:
         return int(default)
 
 
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return float(default)
+
+
 PRECIO_IMPRESO_CENTAVOS = _env_int("PRECIO_IMPRESO_CENTAVOS", 5555)
+STRIPE_FEE_PERCENT = _env_float("STRIPE_FEE_PERCENT", 2.9)
+STRIPE_FEE_FIXED_CENTAVOS = _env_int("STRIPE_FEE_FIXED_CENTAVOS", 30)
 PROMO_ESTADOS_NO_CONSUMEN = {
     "error_generacion",
     "error_envio",
@@ -69,6 +79,89 @@ def etiqueta_tipo_producto(value: Any) -> str:
     if tipo == TIPO_PRODUCTO_IMPRESO:
         return "Libro impreso + PDF digital"
     return "Solo PDF digital"
+
+
+def format_usd_centavos(centavos: Any) -> str:
+    try:
+        value = int(round(float(centavos or 0)))
+    except (TypeError, ValueError):
+        value = 0
+    return f"${value / 100:.2f}"
+
+
+def estimate_stripe_fee_centavos(precio_centavos: Any) -> int:
+    try:
+        amount = max(0, int(precio_centavos or 0))
+    except (TypeError, ValueError):
+        amount = 0
+    if amount <= 0:
+        return 0
+    return int(round((amount * (STRIPE_FEE_PERCENT / 100.0)) + STRIPE_FEE_FIXED_CENTAVOS))
+
+
+def tracking_url_for_carrier(carrier: Any, tracking_number: Any) -> str:
+    tracking = str(tracking_number or "").strip()
+    if not tracking:
+        return ""
+    carrier_norm = str(carrier or "").strip().lower()
+    encoded = quote_plus(tracking)
+    if carrier_norm == "usps":
+        return f"https://tools.usps.com/go/TrackConfirmAction?tLabels={encoded}"
+    if carrier_norm == "ups":
+        return f"https://www.ups.com/track?tracknum={encoded}"
+    if carrier_norm == "fedex":
+        return f"https://www.fedex.com/fedextrack/?trknbr={encoded}"
+    if carrier_norm == "dhl":
+        return f"https://www.dhl.com/us-en/home/tracking/tracking-express.html?tracking-id={encoded}"
+    return ""
+
+
+def calcular_finanzas_pedido(pedido: dict[str, Any]) -> dict[str, Any]:
+    precio = int(pedido.get("precio_centavos") or 0)
+    stripe_fee_raw = pedido.get("stripe_fee_centavos")
+    stripe_fee = int(stripe_fee_raw or 0)
+    stripe_fee_source = pedido.get("stripe_fee_source") or ""
+    if stripe_fee <= 0 and precio > 0:
+        stripe_fee = estimate_stripe_fee_centavos(precio)
+        stripe_fee_source = "estimado"
+    elif stripe_fee > 0 and not stripe_fee_source:
+        stripe_fee_source = "manual"
+
+    try:
+        openai_cost = int(round(float(pedido.get("openai_estimated_cost_usd") or 0) * 100))
+    except (TypeError, ValueError):
+        openai_cost = 0
+
+    print_cost = int(pedido.get("print_cost_centavos") or 0)
+    shipping_cost = int(pedido.get("shipping_cost_centavos") or 0)
+    packaging_cost = int(pedido.get("packaging_cost_centavos") or 0)
+    other_cost = int(pedido.get("other_cost_centavos") or 0)
+    total_cost = stripe_fee + openai_cost + print_cost + shipping_cost + packaging_cost + other_cost
+    net = precio - total_cost
+    margin = round((net / precio) * 100, 2) if precio > 0 else 0
+
+    return {
+        "gross_centavos": precio,
+        "stripe_fee_centavos": stripe_fee,
+        "stripe_fee_source": stripe_fee_source,
+        "openai_cost_centavos": openai_cost,
+        "print_cost_centavos": print_cost,
+        "shipping_cost_centavos": shipping_cost,
+        "packaging_cost_centavos": packaging_cost,
+        "other_cost_centavos": other_cost,
+        "total_cost_centavos": total_cost,
+        "net_centavos": net,
+        "margin_percent": margin,
+        "gross_usd": format_usd_centavos(precio),
+        "stripe_fee_usd": format_usd_centavos(stripe_fee),
+        "openai_cost_usd": format_usd_centavos(openai_cost),
+        "print_cost_usd": format_usd_centavos(print_cost),
+        "shipping_cost_usd": format_usd_centavos(shipping_cost),
+        "packaging_cost_usd": format_usd_centavos(packaging_cost),
+        "other_cost_usd": format_usd_centavos(other_cost),
+        "total_cost_usd": format_usd_centavos(total_cost),
+        "net_usd": format_usd_centavos(net),
+    }
 
 
 # ============================================================
@@ -400,6 +493,26 @@ def _pedido_dict(row):
     data["shipping_country"] = data.get("shipping_country") or ""
     data["tracking_number"] = data.get("tracking_number") or ""
     data["shipping_carrier"] = data.get("shipping_carrier") or ""
+    data["tracking_status"] = data.get("tracking_status") or ""
+    data["tracking_url"] = data.get("tracking_url") or tracking_url_for_carrier(
+        data.get("shipping_carrier"),
+        data.get("tracking_number"),
+    )
+    data["tracking_last_checked_at"] = data.get("tracking_last_checked_at") or ""
+    data["tracking_last_event"] = data.get("tracking_last_event") or ""
+
+    for key in (
+        "stripe_fee_centavos",
+        "stripe_net_centavos",
+        "print_cost_centavos",
+        "shipping_cost_centavos",
+        "packaging_cost_centavos",
+        "other_cost_centavos",
+    ):
+        data[key] = int(data.get(key) or 0)
+    data["stripe_fee_source"] = data.get("stripe_fee_source") or ""
+    data["financial_notes"] = data.get("financial_notes") or ""
+    data["financial_summary"] = calcular_finanzas_pedido(data)
 
     if data.get("estado") == "completado" and not data.get("error"):
         data["error_message"] = None
@@ -524,11 +637,23 @@ def init_db() -> None:
                 precio_centavos INTEGER,
                 promocion_codigo TEXT,
                 promocion_precio_centavos INTEGER,
+                stripe_fee_centavos INTEGER DEFAULT 0,
+                stripe_net_centavos INTEGER DEFAULT 0,
+                stripe_fee_source TEXT,
+                print_cost_centavos INTEGER DEFAULT 0,
+                shipping_cost_centavos INTEGER DEFAULT 0,
+                packaging_cost_centavos INTEGER DEFAULT 0,
+                other_cost_centavos INTEGER DEFAULT 0,
+                financial_notes TEXT,
                 processing_lock INTEGER DEFAULT 0,
                 processing_started_at TIMESTAMP,
                 shipping_country TEXT,
                 tracking_number TEXT,
                 shipping_carrier TEXT,
+                tracking_status TEXT,
+                tracking_url TEXT,
+                tracking_last_checked_at TIMESTAMP,
+                tracking_last_event TEXT,
                 printed_at TIMESTAMP,
                 shipped_at TIMESTAMP,
                 error TEXT,
@@ -563,6 +688,25 @@ def init_db() -> None:
                 duration_seconds NUMERIC,
                 retry_count INTEGER DEFAULT 0,
                 sections TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        _execute("""
+            CREATE TABLE IF NOT EXISTS site_events (
+                id SERIAL PRIMARY KEY,
+                event_type TEXT,
+                path TEXT,
+                endpoint TEXT,
+                visitor_hash TEXT,
+                ip_hash TEXT,
+                user_agent_hash TEXT,
+                referrer TEXT,
+                utm_source TEXT,
+                utm_medium TEXT,
+                utm_campaign TEXT,
+                order_id INTEGER,
+                product_type TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -616,11 +760,23 @@ def init_db() -> None:
         _add_column_if_missing("pedidos", "precio_centavos", "INTEGER")
         _add_column_if_missing("pedidos", "promocion_codigo", "TEXT")
         _add_column_if_missing("pedidos", "promocion_precio_centavos", "INTEGER")
+        _add_column_if_missing("pedidos", "stripe_fee_centavos", "INTEGER DEFAULT 0")
+        _add_column_if_missing("pedidos", "stripe_net_centavos", "INTEGER DEFAULT 0")
+        _add_column_if_missing("pedidos", "stripe_fee_source", "TEXT")
+        _add_column_if_missing("pedidos", "print_cost_centavos", "INTEGER DEFAULT 0")
+        _add_column_if_missing("pedidos", "shipping_cost_centavos", "INTEGER DEFAULT 0")
+        _add_column_if_missing("pedidos", "packaging_cost_centavos", "INTEGER DEFAULT 0")
+        _add_column_if_missing("pedidos", "other_cost_centavos", "INTEGER DEFAULT 0")
+        _add_column_if_missing("pedidos", "financial_notes", "TEXT")
         _add_column_if_missing("pedidos", "processing_lock", "INTEGER DEFAULT 0")
         _add_column_if_missing("pedidos", "processing_started_at", "TIMESTAMP")
         _add_column_if_missing("pedidos", "shipping_country", "TEXT")
         _add_column_if_missing("pedidos", "tracking_number", "TEXT")
         _add_column_if_missing("pedidos", "shipping_carrier", "TEXT")
+        _add_column_if_missing("pedidos", "tracking_status", "TEXT")
+        _add_column_if_missing("pedidos", "tracking_url", "TEXT")
+        _add_column_if_missing("pedidos", "tracking_last_checked_at", "TIMESTAMP")
+        _add_column_if_missing("pedidos", "tracking_last_event", "TEXT")
         _add_column_if_missing("pedidos", "printed_at", "TIMESTAMP")
         _add_column_if_missing("pedidos", "shipped_at", "TIMESTAMP")
         _add_column_if_missing("pedidos", "error", "TEXT")
@@ -674,11 +830,23 @@ def init_db() -> None:
                 precio_centavos INTEGER,
                 promocion_codigo TEXT,
                 promocion_precio_centavos INTEGER,
+                stripe_fee_centavos INTEGER DEFAULT 0,
+                stripe_net_centavos INTEGER DEFAULT 0,
+                stripe_fee_source TEXT,
+                print_cost_centavos INTEGER DEFAULT 0,
+                shipping_cost_centavos INTEGER DEFAULT 0,
+                packaging_cost_centavos INTEGER DEFAULT 0,
+                other_cost_centavos INTEGER DEFAULT 0,
+                financial_notes TEXT,
                 processing_lock INTEGER DEFAULT 0,
                 processing_started_at TEXT,
                 shipping_country TEXT,
                 tracking_number TEXT,
                 shipping_carrier TEXT,
+                tracking_status TEXT,
+                tracking_url TEXT,
+                tracking_last_checked_at TEXT,
+                tracking_last_event TEXT,
                 printed_at TEXT,
                 shipped_at TEXT,
                 error TEXT,
@@ -713,6 +881,25 @@ def init_db() -> None:
                 duration_seconds REAL,
                 retry_count INTEGER DEFAULT 0,
                 sections TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        _execute("""
+            CREATE TABLE IF NOT EXISTS site_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT,
+                path TEXT,
+                endpoint TEXT,
+                visitor_hash TEXT,
+                ip_hash TEXT,
+                user_agent_hash TEXT,
+                referrer TEXT,
+                utm_source TEXT,
+                utm_medium TEXT,
+                utm_campaign TEXT,
+                order_id INTEGER,
+                product_type TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -765,11 +952,23 @@ def init_db() -> None:
         _add_column_if_missing("pedidos", "precio_centavos", "INTEGER")
         _add_column_if_missing("pedidos", "promocion_codigo", "TEXT")
         _add_column_if_missing("pedidos", "promocion_precio_centavos", "INTEGER")
+        _add_column_if_missing("pedidos", "stripe_fee_centavos", "INTEGER DEFAULT 0")
+        _add_column_if_missing("pedidos", "stripe_net_centavos", "INTEGER DEFAULT 0")
+        _add_column_if_missing("pedidos", "stripe_fee_source", "TEXT")
+        _add_column_if_missing("pedidos", "print_cost_centavos", "INTEGER DEFAULT 0")
+        _add_column_if_missing("pedidos", "shipping_cost_centavos", "INTEGER DEFAULT 0")
+        _add_column_if_missing("pedidos", "packaging_cost_centavos", "INTEGER DEFAULT 0")
+        _add_column_if_missing("pedidos", "other_cost_centavos", "INTEGER DEFAULT 0")
+        _add_column_if_missing("pedidos", "financial_notes", "TEXT")
         _add_column_if_missing("pedidos", "processing_lock", "INTEGER DEFAULT 0")
         _add_column_if_missing("pedidos", "processing_started_at", "TEXT")
         _add_column_if_missing("pedidos", "shipping_country", "TEXT")
         _add_column_if_missing("pedidos", "tracking_number", "TEXT")
         _add_column_if_missing("pedidos", "shipping_carrier", "TEXT")
+        _add_column_if_missing("pedidos", "tracking_status", "TEXT")
+        _add_column_if_missing("pedidos", "tracking_url", "TEXT")
+        _add_column_if_missing("pedidos", "tracking_last_checked_at", "TEXT")
+        _add_column_if_missing("pedidos", "tracking_last_event", "TEXT")
         _add_column_if_missing("pedidos", "printed_at", "TEXT")
         _add_column_if_missing("pedidos", "shipped_at", "TEXT")
         _add_column_if_missing("pedidos", "error", "TEXT")
@@ -793,6 +992,9 @@ def init_db() -> None:
     _execute("CREATE INDEX IF NOT EXISTS idx_resenas_pedido_id ON resenas (pedido_id)")
     _execute("CREATE INDEX IF NOT EXISTS idx_notificaciones_pedido_id ON notificaciones (pedido_id)")
     _execute("CREATE INDEX IF NOT EXISTS idx_openai_usage_logs_order_id ON openai_usage_logs (order_id)")
+    _execute("CREATE INDEX IF NOT EXISTS idx_site_events_created_at ON site_events (created_at)")
+    _execute("CREATE INDEX IF NOT EXISTS idx_site_events_type ON site_events (event_type)")
+    _execute("CREATE INDEX IF NOT EXISTS idx_site_events_visitor ON site_events (visitor_hash)")
 
     _commit()
     logger.info("Tablas %s verificadas correctamente.", "PostgreSQL" if _use_postgres() else "SQLite")
@@ -997,11 +1199,23 @@ def update_pedido_campos(
         "precio_centavos",
         "promocion_codigo",
         "promocion_precio_centavos",
+        "stripe_fee_centavos",
+        "stripe_net_centavos",
+        "stripe_fee_source",
+        "print_cost_centavos",
+        "shipping_cost_centavos",
+        "packaging_cost_centavos",
+        "other_cost_centavos",
+        "financial_notes",
         "processing_lock",
         "processing_started_at",
         "shipping_country",
         "tracking_number",
         "shipping_carrier",
+        "tracking_status",
+        "tracking_url",
+        "tracking_last_checked_at",
+        "tracking_last_event",
         "printed_at",
         "shipped_at",
         "error",
@@ -1066,11 +1280,22 @@ def marcar_pedido_pagado(
     stripe_checkout_session_id: Optional[str] = None,
     stripe_payment_intent: Optional[str] = None,
 ) -> int:
+    pedido = get_pedido_by_id(pedido_id)
+    precio = int((pedido or {}).get("precio_centavos") or PRECIO_NORMAL_CENTAVOS)
+    stripe_fee = int((pedido or {}).get("stripe_fee_centavos") or 0)
+    stripe_fee_source = (pedido or {}).get("stripe_fee_source") or ""
+    if stripe_fee <= 0:
+        stripe_fee = estimate_stripe_fee_centavos(precio)
+        stripe_fee_source = "estimado"
+
     return update_pedido_campos(
         pedido_id,
         estado="pagado",
         stripe_session_id=stripe_checkout_session_id,
         stripe_payment_intent=stripe_payment_intent,
+        stripe_fee_centavos=stripe_fee,
+        stripe_net_centavos=max(0, precio - stripe_fee),
+        stripe_fee_source=stripe_fee_source,
         clear_error=True,
     )
 
@@ -1154,6 +1379,305 @@ def codigo_confirmacion_pedido(pedido_id: int) -> str:
     """
     numero = (int(pedido_id) * 9301 + 49297) % 900000 + 100000
     return f"ALMA-{numero:06d}"
+
+
+# ============================================================
+# Finanzas, tracking y analiticas
+# ============================================================
+
+def update_pedido_finanzas(
+    pedido_id: int,
+    *,
+    stripe_fee_centavos: Optional[int] = None,
+    stripe_fee_source: str = "manual",
+    print_cost_centavos: Optional[int] = None,
+    shipping_cost_centavos: Optional[int] = None,
+    packaging_cost_centavos: Optional[int] = None,
+    other_cost_centavos: Optional[int] = None,
+    financial_notes: Optional[str] = None,
+) -> int:
+    pedido = get_pedido_by_id(pedido_id)
+    if pedido is None:
+        return 0
+
+    precio = int(pedido.get("precio_centavos") or 0)
+    fee = int(stripe_fee_centavos or 0)
+    if fee <= 0:
+        fee = estimate_stripe_fee_centavos(precio)
+        stripe_fee_source = "estimado"
+
+    return update_pedido_campos(
+        pedido_id,
+        stripe_fee_centavos=fee,
+        stripe_net_centavos=max(0, precio - fee),
+        stripe_fee_source=stripe_fee_source,
+        print_cost_centavos=int(print_cost_centavos or 0),
+        shipping_cost_centavos=int(shipping_cost_centavos or 0),
+        packaging_cost_centavos=int(packaging_cost_centavos or 0),
+        other_cost_centavos=int(other_cost_centavos or 0),
+        financial_notes=(financial_notes or "").strip(),
+    )
+
+
+def update_pedido_tracking(
+    pedido_id: int,
+    *,
+    tracking_number: str,
+    shipping_carrier: str,
+    tracking_status: str = "enviado",
+    tracking_last_event: Optional[str] = None,
+) -> int:
+    tracking = str(tracking_number or "").strip()
+    carrier = str(shipping_carrier or "").strip()
+    return update_pedido_campos(
+        pedido_id,
+        tracking_number=tracking,
+        shipping_carrier=carrier,
+        tracking_status=(tracking_status or "enviado").strip(),
+        tracking_url=tracking_url_for_carrier(carrier, tracking),
+        tracking_last_checked_at=_now_iso(),
+        tracking_last_event=(tracking_last_event or "").strip(),
+    )
+
+
+def record_site_event(
+    event_type: str,
+    *,
+    path: str = "",
+    endpoint: str = "",
+    visitor_hash: str = "",
+    ip_hash: str = "",
+    user_agent_hash: str = "",
+    referrer: str = "",
+    utm_source: str = "",
+    utm_medium: str = "",
+    utm_campaign: str = "",
+    order_id: Optional[int] = None,
+    product_type: str = "",
+) -> None:
+    try:
+        _execute(
+            """
+            INSERT INTO site_events (
+                event_type, path, endpoint, visitor_hash, ip_hash, user_agent_hash,
+                referrer, utm_source, utm_medium, utm_campaign, order_id, product_type,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """,
+            (
+                str(event_type or "").strip()[:80],
+                str(path or "").strip()[:500],
+                str(endpoint or "").strip()[:160],
+                str(visitor_hash or "").strip()[:128],
+                str(ip_hash or "").strip()[:128],
+                str(user_agent_hash or "").strip()[:128],
+                str(referrer or "").strip()[:500],
+                str(utm_source or "").strip()[:120],
+                str(utm_medium or "").strip()[:120],
+                str(utm_campaign or "").strip()[:120],
+                int(order_id) if order_id else None,
+                str(product_type or "").strip()[:80],
+            ),
+        )
+        _commit()
+    except Exception:
+        logger.debug("No se pudo registrar evento de analiticas.", exc_info=True)
+        try:
+            _rollback()
+        except Exception:
+            pass
+
+
+def get_analytics_summary(days: int = 14) -> dict[str, Any]:
+    days = max(1, min(int(days or 14), 90))
+    since = datetime.now(timezone.utc) - timedelta(days=days - 1)
+    since_date = since.date()
+
+    event_rows = _fetchall(
+        """
+        SELECT *
+        FROM site_events
+        WHERE created_at >= ?
+        ORDER BY created_at DESC
+        LIMIT 20000
+        """,
+        (since_date.isoformat(),),
+    )
+    order_rows = list_pedidos(limit=5000)
+
+    by_day: dict[str, dict[str, Any]] = {}
+    for i in range(days):
+        d = (since_date + timedelta(days=i)).isoformat()
+        by_day[d] = {
+            "date": d,
+            "page_views": 0,
+            "unique_visitors": set(),
+            "pedido_views": 0,
+            "checkout_attempts": 0,
+            "checkout_started": 0,
+            "orders": 0,
+            "paid_orders": 0,
+            "gross_centavos": 0,
+            "stripe_fee_centavos": 0,
+            "openai_cost_centavos": 0,
+            "print_cost_centavos": 0,
+            "shipping_cost_centavos": 0,
+            "total_cost_centavos": 0,
+            "net_centavos": 0,
+        }
+
+    def _date_key(value: Any) -> Optional[str]:
+        parsed = _parse_datetime(value)
+        if parsed is None:
+            text = str(value or "").strip()
+            return text[:10] if len(text) >= 10 else None
+        return parsed.date().isoformat()
+
+    for row in event_rows:
+        data = dict(row)
+        d = _date_key(data.get("created_at"))
+        if d not in by_day:
+            continue
+        event_type = data.get("event_type")
+        if event_type == "page_view":
+            by_day[d]["page_views"] += 1
+        elif event_type == "pedido_view":
+            by_day[d]["pedido_views"] += 1
+        elif event_type == "checkout_attempt":
+            by_day[d]["checkout_attempts"] += 1
+        elif event_type == "checkout_started":
+            by_day[d]["checkout_started"] += 1
+        visitor = data.get("visitor_hash")
+        if visitor:
+            by_day[d]["unique_visitors"].add(visitor)
+
+    paid_states = {
+        "pagado",
+        "generando_contenido",
+        "reparando_json",
+        "completando_secciones",
+        "generando_pdf",
+        "subiendo_drive",
+        "enviando_email",
+        "pdf_entregado",
+        "completado",
+        "pendiente_impresion",
+        "impreso",
+        "enviado",
+        "entregado",
+        "error_openai",
+        "error_json",
+        "error_pdf",
+        "error_drive",
+        "error_email",
+        "error_generacion",
+        "error_envio",
+        "revision_manual",
+        "needs_admin_review",
+    }
+
+    for pedido in order_rows:
+        d = _date_key(pedido.get("created_at") or pedido.get("creado_en"))
+        if d not in by_day:
+            continue
+        by_day[d]["orders"] += 1
+        if str(pedido.get("estado") or "").lower() in paid_states:
+            fin = calcular_finanzas_pedido(pedido)
+            by_day[d]["paid_orders"] += 1
+            for key in (
+                "gross_centavos",
+                "stripe_fee_centavos",
+                "openai_cost_centavos",
+                "print_cost_centavos",
+                "shipping_cost_centavos",
+                "total_cost_centavos",
+                "net_centavos",
+            ):
+                by_day[d][key] += int(fin.get(key) or 0)
+
+    rows = []
+    totals = {
+        "page_views": 0,
+        "unique_visitors": 0,
+        "pedido_views": 0,
+        "checkout_attempts": 0,
+        "checkout_started": 0,
+        "orders": 0,
+        "paid_orders": 0,
+        "gross_centavos": 0,
+        "stripe_fee_centavos": 0,
+        "openai_cost_centavos": 0,
+        "print_cost_centavos": 0,
+        "shipping_cost_centavos": 0,
+        "total_cost_centavos": 0,
+        "net_centavos": 0,
+    }
+
+    for d in sorted(by_day.keys(), reverse=True):
+        item = by_day[d]
+        item["unique_visitors"] = len(item["unique_visitors"])
+        item["visit_to_checkout_rate"] = (
+            round((item["checkout_started"] / item["unique_visitors"]) * 100, 2)
+            if item["unique_visitors"]
+            else 0
+        )
+        item["visit_to_paid_rate"] = (
+            round((item["paid_orders"] / item["unique_visitors"]) * 100, 2)
+            if item["unique_visitors"]
+            else 0
+        )
+        item["checkout_to_paid_rate"] = (
+            round((item["paid_orders"] / item["checkout_started"]) * 100, 2)
+            if item["checkout_started"]
+            else 0
+        )
+        for key in totals:
+            totals[key] += int(item.get(key) or 0)
+        for key in (
+            "gross_centavos",
+            "stripe_fee_centavos",
+            "openai_cost_centavos",
+            "print_cost_centavos",
+            "shipping_cost_centavos",
+            "total_cost_centavos",
+            "net_centavos",
+        ):
+            item[key.replace("_centavos", "_usd")] = format_usd_centavos(item[key])
+        rows.append(item)
+
+    totals["visit_to_checkout_rate"] = (
+        round((totals["checkout_started"] / totals["unique_visitors"]) * 100, 2)
+        if totals["unique_visitors"]
+        else 0
+    )
+    totals["visit_to_paid_rate"] = (
+        round((totals["paid_orders"] / totals["unique_visitors"]) * 100, 2)
+        if totals["unique_visitors"]
+        else 0
+    )
+    totals["checkout_to_paid_rate"] = (
+        round((totals["paid_orders"] / totals["checkout_started"]) * 100, 2)
+        if totals["checkout_started"]
+        else 0
+    )
+    for key in (
+        "gross_centavos",
+        "stripe_fee_centavos",
+        "openai_cost_centavos",
+        "print_cost_centavos",
+        "shipping_cost_centavos",
+        "total_cost_centavos",
+        "net_centavos",
+    ):
+        totals[key.replace("_centavos", "_usd")] = format_usd_centavos(totals[key])
+
+    return {
+        "days": days,
+        "rows": rows,
+        "totals": totals,
+        "stripe_fee_note": f"Stripe estimado por defecto: {STRIPE_FEE_PERCENT:.2f}% + {format_usd_centavos(STRIPE_FEE_FIXED_CENTAVOS)}. Puedes corregirlo manualmente por pedido.",
+    }
 
 
 # ============================================================

@@ -12,6 +12,7 @@
         <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_completados') }}">Completados</a>
         <a class="btn-outline btn-sm py-2 active-admin-tab" href="{{ url_for('main.admin_impresos') }}">Impresos</a>
         <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_resenas') }}">Reseñas</a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_analiticas') }}">Analíticas</a>
         <a class="btn-outline btn-sm py-2" href="{{ url_for('main.index') }}">Tienda</a>
         <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_logout') }}">Salir</a>
       </div>
@@ -87,7 +88,15 @@
                     Regalo: {{ "Sí" if p["es_regalo"] else "No" }}
                   {% endif %}
                 </td>
-                <td class="mono-small text-break">{{ p["tracking_number"] or "—" }}</td>
+                <td class="mono-small text-break">
+                  {{ p["tracking_number"] or "—" }}
+                  {% if p["tracking_url"] %}
+                    <br /><a href="{{ p['tracking_url'] }}" target="_blank" rel="noopener noreferrer">Abrir rastreo</a>
+                  {% endif %}
+                  {% if p["tracking_status"] %}
+                    <br /><span class="text-muted">{{ p["tracking_status"] }}</span>
+                  {% endif %}
+                </td>
                 <td>{{ p["shipping_carrier"] or "—" }}</td>
                 <td class="mono-small">{{ p["printed_at"] or "—" }}</td>
                 <td class="mono-small">{{ p["shipped_at"] or "—" }}</td>

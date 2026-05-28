@@ -317,6 +317,7 @@ def _build_customer_shipping_body(pedido: Any) -> str:
     nombre = _get(pedido, "nombre") or "alma bonita"
     carrier = _get(pedido, "shipping_carrier") or "Transportista"
     tracking = _get(pedido, "tracking_number") or "(no disponible)"
+    tracking_url = _get(pedido, "tracking_url") or database.tracking_url_for_carrier(carrier, tracking)
     lines = [
         f"Hola {nombre},",
         "",
@@ -327,12 +328,17 @@ def _build_customer_shipping_body(pedido: Any) -> str:
         "Número de seguimiento:",
         str(tracking),
         "",
+    ]
+    if tracking_url:
+        lines.extend(["", f"Enlace de rastreo: {tracking_url}"])
+    lines.extend([
+        "",
         "Puedes rastrear tu pedido con ese número en la web oficial del transportista.",
         "",
         "Tu PDF digital ya fue entregado por correo; este aviso corresponde al envío físico de tu libro personalizado.",
         "",
         "Gracias por confiar en Mapa del Alma.",
-    ]
+    ])
     return "\n".join(lines) + "\n"
 
 
@@ -340,7 +346,13 @@ def _build_customer_shipping_html(pedido: Any) -> str:
     nombre = _get(pedido, "nombre") or "alma bonita"
     carrier = _get(pedido, "shipping_carrier") or "Transportista"
     tracking = _get(pedido, "tracking_number") or "(no disponible)"
+    tracking_url = _get(pedido, "tracking_url") or database.tracking_url_for_carrier(carrier, tracking)
     codigo = _codigo_pedido(pedido)
+    tracking_link_html = (
+        f'<p style="margin:0 0 12px;"><a href="{tracking_url}" style="color:#243b7a;font-weight:bold;">Abrir rastreo oficial</a></p>'
+        if tracking_url
+        else ""
+    )
     return f"""
 <div style="font-family:Arial,Helvetica,sans-serif;color:#2f2a36;line-height:1.55;">
   <h2 style="margin:0 0 12px;color:#243b7a;">Tu libro ha sido enviado</h2>
@@ -352,6 +364,7 @@ def _build_customer_shipping_html(pedido: Any) -> str:
     <p style="margin:0;"><strong>Número de seguimiento:</strong> {tracking}</p>
   </div>
   <p style="margin:0 0 12px;">Puedes rastrear tu pedido con ese número en la web oficial del transportista.</p>
+  {tracking_link_html}
   <p style="margin:0;">Gracias por confiar en <strong>Mapa del Alma</strong>.</p>
 </div>
 """.strip()

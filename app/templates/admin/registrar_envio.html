@@ -16,6 +16,7 @@
       <div class="d-flex gap-2">
         <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_impresos') }}">Impresos</a>
         <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_pedidos') }}">Pedidos</a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_analiticas') }}">Analíticas</a>
       </div>
     </div>
 
@@ -48,6 +49,54 @@
               </select>
             </div>
 
+            <div class="mb-3">
+              <label class="form-label" for="tracking_status">Estado visible del tracking</label>
+              <select class="form-select form-select-mystic" id="tracking_status" name="tracking_status">
+                {% for status in ["enviado", "en transito", "pendiente de transportista", "entregado"] %}
+                  <option value="{{ status }}" {% if pedido["tracking_status"] == status %}selected{% endif %}>{{ status|capitalize }}</option>
+                {% endfor %}
+              </select>
+              <p class="small text-muted mb-0 mt-1">El enlace oficial del transportista se genera automáticamente cuando guardas.</p>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label" for="tracking_last_event">Nota interna del tracking</label>
+              <input
+                class="form-control"
+                id="tracking_last_event"
+                name="tracking_last_event"
+                value="{{ pedido['tracking_last_event'] or 'Tracking registrado en admin' }}"
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="row g-2 mb-3">
+              <div class="col-6">
+                <label class="form-label" for="print_cost_usd">Impresión USD</label>
+                <input class="form-control" id="print_cost_usd" name="print_cost_usd" value="{{ '%.2f'|format((pedido['print_cost_centavos'] or 0) / 100) }}" inputmode="decimal" />
+              </div>
+              <div class="col-6">
+                <label class="form-label" for="shipping_cost_usd">Envío USD</label>
+                <input class="form-control" id="shipping_cost_usd" name="shipping_cost_usd" value="{{ '%.2f'|format((pedido['shipping_cost_centavos'] or 0) / 100) }}" inputmode="decimal" />
+              </div>
+              <div class="col-6">
+                <label class="form-label" for="stripe_fee_usd">Stripe USD</label>
+                <input class="form-control" id="stripe_fee_usd" name="stripe_fee_usd" value="{{ '%.2f'|format((pedido['financial_summary']['stripe_fee_centavos'] or 0) / 100) }}" inputmode="decimal" />
+              </div>
+              <div class="col-6">
+                <label class="form-label" for="packaging_cost_usd">Empaque USD</label>
+                <input class="form-control" id="packaging_cost_usd" name="packaging_cost_usd" value="{{ '%.2f'|format((pedido['packaging_cost_centavos'] or 0) / 100) }}" inputmode="decimal" />
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="other_cost_usd">Otros costos USD</label>
+                <input class="form-control" id="other_cost_usd" name="other_cost_usd" value="{{ '%.2f'|format((pedido['other_cost_centavos'] or 0) / 100) }}" inputmode="decimal" />
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="financial_notes">Notas internas de costo</label>
+                <textarea class="form-control" id="financial_notes" name="financial_notes" rows="2">{{ pedido["financial_notes"] }}</textarea>
+              </div>
+            </div>
+
             <button type="submit" class="btn-primary-lg border-0 w-100">
               Guardar envío
             </button>
@@ -69,6 +118,14 @@
 
             <dt class="col-sm-5 text-muted">Producto</dt>
             <dd class="col-sm-7">{{ pedido["tipo_producto_label"] }}</dd>
+
+            <dt class="col-sm-5 text-muted">Ganancia estimada</dt>
+            <dd class="col-sm-7 mono-small">{{ pedido["financial_summary"]["net_usd"] }}</dd>
+
+            {% if pedido["tracking_url"] %}
+              <dt class="col-sm-5 text-muted">Rastreo actual</dt>
+              <dd class="col-sm-7"><a href="{{ pedido['tracking_url'] }}" target="_blank" rel="noopener noreferrer">Abrir tracking</a></dd>
+            {% endif %}
 
             <dt class="col-sm-5 text-muted">PDF</dt>
             <dd class="col-sm-7">

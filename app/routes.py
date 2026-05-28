@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import hmac
+import hashlib
 import os
 import secrets
 import time
@@ -186,6 +187,75 @@ def _client_ip() -> str:
     return request.remote_addr or "unknown"
 
 
+def _hash_for_analytics(value: str) -> str:
+    secret = current_app.config.get("SECRET_KEY") or current_app.secret_key or "mapa-del-alma"
+    raw = f"{secret}|{value or ''}".encode("utf-8", errors="ignore")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _record_analytics_event(event_type: str, *, order_id: Optional[int] = None, product_type: str = "") -> None:
+    try:
+        ip = _client_ip()
+        ua = request.headers.get("User-Agent", "")
+        database.record_site_event(
+            event_type,
+            path=request.path,
+            endpoint=request.endpoint or "",
+            visitor_hash=_hash_for_analytics(f"{ip}|{ua}"),
+            ip_hash=_hash_for_analytics(ip),
+            user_agent_hash=_hash_for_analytics(ua),
+            referrer=request.headers.get("Referer", ""),
+            utm_source=request.args.get("utm_source", ""),
+            utm_medium=request.args.get("utm_medium", ""),
+            utm_campaign=request.args.get("utm_campaign", ""),
+            order_id=order_id,
+            product_type=product_type,
+        )
+    except Exception:
+        logger.debug("No se pudo registrar evento de analiticas.", exc_info=True)
+
+
+@bp.before_request
+def _track_public_analytics():
+    if request.method != "GET":
+        return None
+    endpoint = request.endpoint or ""
+    if not endpoint.startswith("main."):
+        return None
+    if endpoint.startswith("main.admin") or endpoint in {
+        "main.admin_login",
+        "main.stripe_webhook",
+        "main.health",
+        "main.robots_txt",
+        "main.descarga_pdf",
+        "main.descarga_pdf_token",
+    }:
+        return None
+    if session.get("admin_ok"):
+        return None
+
+    event_type = "pedido_view" if endpoint == "main.pedido" else "page_view"
+    _record_analytics_event(event_type)
+    return None
+
+
+def _money_to_centavos(value: str) -> int:
+    text = str(value or "").strip().replace("$", "").replace(",", ".")
+    if not text:
+        return 0
+    try:
+        return max(0, int(round(float(text) * 100)))
+    except ValueError:
+        return 0
+
+
+def _money_form_centavos(name: str, default: int = 0) -> int:
+    raw = request.form.get(name)
+    if raw is None or str(raw).strip() == "":
+        return int(default or 0)
+    return _money_to_centavos(raw)
+
+
 def _admin_login_is_limited(ip: str) -> bool:
     now = time.time()
     attempts = [ts for ts in ADMIN_LOGIN_ATTEMPTS.get(ip, []) if now - ts < ADMIN_LOGIN_WINDOW_SECONDS]
@@ -347,6 +417,7 @@ def _crear_checkout_desde_form():
     shipping_country = (request.form.get("shipping_country") or "").strip().upper()
     es_regalo = (request.form.get("es_regalo") or "").strip().lower() in {"1", "si", "sí", "true", "yes"}
     dedicatoria = (request.form.get("dedicatoria") or "").strip()
+    _record_analytics_event("checkout_attempt", product_type=tipo_producto)
     if not es_regalo:
         dedicatoria = ""
     acepta = request.form.get("acepta")
@@ -534,6 +605,7 @@ def _crear_checkout_desde_form():
         promocion_codigo=promocion_codigo,
         promocion_precio_centavos=promocion_precio_centavos,
     )
+    _record_analytics_event("checkout_started", order_id=nuevo_id, product_type=tipo_producto)
 
     return redirect(checkout_session.url, code=303)
 
@@ -811,6 +883,12 @@ def _sincronizar_post_pago_desde_return_stripe(pedido_id: int, stripe_session_id
     meta = (data.get("metadata") or {}).get("pedido_id", "")
     if str(pedido_id) != str(meta):
         return
+
+    _record_analytics_event(
+        "payment_confirmed",
+        order_id=pedido_id,
+        product_type=str((data.get("metadata") or {}).get("tipo_producto") or ""),
+    )
 
     database.update_pedido_campos(
         pedido_id,
@@ -1220,6 +1298,16 @@ def stripe_webhook():
         pedido_id = _resolve_pedido_id_from_checkout_session(session_data)
         if pedido_id is None:
             return "", 200
+        try:
+            database.record_site_event(
+                "payment_confirmed",
+                path="/stripe-webhook",
+                endpoint="main.stripe_webhook",
+                order_id=pedido_id,
+                product_type=str((session_data.get("metadata") or {}).get("tipo_producto") or ""),
+            )
+        except Exception:
+            logger.debug("No se pudo registrar analytics de pago confirmado.", exc_info=True)
         database.update_pedido_campos(
             pedido_id,
             stripe_session_id=str(session_data.get("id") or ""),
@@ -1354,6 +1442,23 @@ def admin_impresos():
         etiqueta_estado=etiqueta_estado,
         current_tab="impresos",
         codigo_confirmacion_pedido=database.codigo_confirmacion_pedido,
+    )
+
+
+@bp.route("/admin/analiticas")
+@admin_required
+def admin_analiticas():
+    """Analiticas internas de visitas, checkout, compras y ganancia."""
+    try:
+        days = int(request.args.get("dias", 14))
+    except ValueError:
+        days = 14
+    resumen = database.get_analytics_summary(days=days)
+    return render_template(
+        "admin/analiticas.html",
+        resumen=resumen,
+        current_tab="analiticas",
+        format_usd_centavos=database.format_usd_centavos,
     )
 
 
@@ -1737,8 +1842,43 @@ def admin_pedido_registrar_envio(pedido_id: int):
     if request.method == "POST":
         tracking = (request.form.get("tracking_number") or "").strip()
         carrier = (request.form.get("shipping_carrier") or "").strip()
+        tracking_status = (request.form.get("tracking_status") or "enviado").strip()
+        tracking_last_event = (request.form.get("tracking_last_event") or "Tracking registrado en admin").strip()
         try:
             resultado = registrar_envio_pedido(pedido_id, tracking, carrier)
+            database.update_pedido_tracking(
+                pedido_id,
+                tracking_number=tracking,
+                shipping_carrier=carrier,
+                tracking_status=tracking_status,
+                tracking_last_event=tracking_last_event,
+            )
+            pedido_actual = database.get_pedido_by_id(pedido_id) or pedido
+            database.update_pedido_finanzas(
+                pedido_id,
+                stripe_fee_centavos=_money_form_centavos(
+                    "stripe_fee_usd",
+                    int(pedido_actual.get("stripe_fee_centavos") or 0),
+                ),
+                stripe_fee_source="manual",
+                print_cost_centavos=_money_form_centavos(
+                    "print_cost_usd",
+                    int(pedido_actual.get("print_cost_centavos") or 0),
+                ),
+                shipping_cost_centavos=_money_form_centavos(
+                    "shipping_cost_usd",
+                    int(pedido_actual.get("shipping_cost_centavos") or 0),
+                ),
+                packaging_cost_centavos=_money_form_centavos(
+                    "packaging_cost_usd",
+                    int(pedido_actual.get("packaging_cost_centavos") or 0),
+                ),
+                other_cost_centavos=_money_form_centavos(
+                    "other_cost_usd",
+                    int(pedido_actual.get("other_cost_centavos") or 0),
+                ),
+                financial_notes=request.form.get("financial_notes") or pedido_actual.get("financial_notes") or "",
+            )
             if resultado.get("email_cliente"):
                 flash("Envío registrado y email de tracking enviado al cliente.", "success")
             else:
@@ -1756,6 +1896,28 @@ def admin_pedido_registrar_envio(pedido_id: int):
         codigo_confirmacion_pedido=database.codigo_confirmacion_pedido,
         current_tab="impresos",
     )
+
+
+@bp.route("/admin/pedidos/<int:pedido_id>/finanzas", methods=["POST"])
+@admin_required
+def admin_pedido_finanzas(pedido_id: int):
+    pedido = database.get_pedido_by_id(pedido_id)
+    if pedido is None:
+        flash("Pedido no encontrado.", "error")
+        return redirect(url_for("main.admin_pedidos"))
+
+    database.update_pedido_finanzas(
+        pedido_id,
+        stripe_fee_centavos=_money_form_centavos("stripe_fee_usd", int(pedido.get("stripe_fee_centavos") or 0)),
+        stripe_fee_source="manual",
+        print_cost_centavos=_money_form_centavos("print_cost_usd", int(pedido.get("print_cost_centavos") or 0)),
+        shipping_cost_centavos=_money_form_centavos("shipping_cost_usd", int(pedido.get("shipping_cost_centavos") or 0)),
+        packaging_cost_centavos=_money_form_centavos("packaging_cost_usd", int(pedido.get("packaging_cost_centavos") or 0)),
+        other_cost_centavos=_money_form_centavos("other_cost_usd", int(pedido.get("other_cost_centavos") or 0)),
+        financial_notes=request.form.get("financial_notes") or "",
+    )
+    flash("Costos y ganancia del pedido actualizados.", "success")
+    return redirect(url_for("main.admin_pedido_detail", pedido_id=pedido_id, tab=request.form.get("tab") or "pedidos"))
 
 
 @bp.route("/admin/pedidos/<int:pedido_id>/marcar-entregado", methods=["POST"])
