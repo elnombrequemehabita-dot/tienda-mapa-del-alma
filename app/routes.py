@@ -259,6 +259,7 @@ def _render_pedido_form(**ctx):
         "tipo_producto_selected": database.TIPO_PRODUCTO_DIGITAL,
         "precio_impreso": _precio_usd_centavos(database.PRECIO_IMPRESO_CENTAVOS),
         "precio_impreso_centavos": database.PRECIO_IMPRESO_CENTAVOS,
+        "shipping_country_selected": "",
         "es_regalo_prev": False,
         "dedicatoria": "",
         "acepta_prev": False,
@@ -278,6 +279,7 @@ def _crear_checkout_desde_form():
     forma_raw = request.form.get("forma_trato")
     idioma_raw = request.form.get("idioma")
     tipo_producto = _normalizar_tipo_producto_form(request.form.get("tipo_producto"))
+    shipping_country = (request.form.get("shipping_country") or "").strip().upper()
     es_regalo = (request.form.get("es_regalo") or "").strip().lower() in {"1", "si", "sí", "true", "yes"}
     dedicatoria = (request.form.get("dedicatoria") or "").strip()
     if not es_regalo:
@@ -305,6 +307,15 @@ def _crear_checkout_desde_form():
     if es_regalo and len(dedicatoria) > 500:
         errores.append("La dedicatoria debe tener 500 caracteres o menos.")
 
+    if tipo_producto == database.TIPO_PRODUCTO_IMPRESO:
+        if shipping_country != "US":
+            errores.append(
+                "No es un error de la página: el libro impreso por ahora solo está disponible para envíos dentro de Estados Unidos. "
+                "Puedes elegir Solo PDF Digital y comprarlo desde cualquier país del mundo."
+            )
+    else:
+        shipping_country = ""
+
     fecha_nacimiento: Optional[str] = None
     if fecha_nacimiento_raw:
         try:
@@ -330,6 +341,7 @@ def _crear_checkout_desde_form():
             forma_trato_selected=forma_norm or "",
             idioma_selected=idioma_norm,
             tipo_producto_selected=tipo_producto,
+            shipping_country_selected=shipping_country,
             es_regalo_prev=es_regalo,
             dedicatoria=dedicatoria,
             acepta_prev=bool(acepta),
@@ -360,6 +372,7 @@ def _crear_checkout_desde_form():
         tipo_producto=tipo_producto,
         es_regalo=es_regalo,
         dedicatoria=dedicatoria if es_regalo and dedicatoria else None,
+        shipping_country=shipping_country if tipo_producto == database.TIPO_PRODUCTO_IMPRESO else None,
         precio_centavos=precio_centavos,
         promocion_codigo=promocion_codigo,
         promocion_precio_centavos=promocion_precio_centavos,
@@ -403,6 +416,7 @@ def _crear_checkout_desde_form():
                 "email": email,
                 "idioma": idioma_norm,
                 "tipo_producto": tipo_producto,
+                "shipping_country": shipping_country,
                 "es_regalo": "1" if es_regalo else "0",
                 "precio_centavos": str(precio_centavos),
                 "promocion_codigo": promocion_codigo or "",
@@ -440,6 +454,7 @@ def _crear_checkout_desde_form():
             forma_trato_selected=forma_norm or "",
             idioma_selected=idioma_norm,
             tipo_producto_selected=tipo_producto,
+            shipping_country_selected=shipping_country,
             es_regalo_prev=es_regalo,
             dedicatoria=dedicatoria,
             acepta_prev=bool(acepta),

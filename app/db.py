@@ -397,6 +397,7 @@ def _pedido_dict(row):
     data["tipo_producto_label"] = etiqueta_tipo_producto(data.get("tipo_producto"))
     data["es_regalo"] = _bool_from_db(data.get("es_regalo"))
     data["dedicatoria"] = data.get("dedicatoria") or ""
+    data["shipping_country"] = data.get("shipping_country") or ""
     data["tracking_number"] = data.get("tracking_number") or ""
     data["shipping_carrier"] = data.get("shipping_carrier") or ""
 
@@ -525,6 +526,7 @@ def init_db() -> None:
                 promocion_precio_centavos INTEGER,
                 processing_lock INTEGER DEFAULT 0,
                 processing_started_at TIMESTAMP,
+                shipping_country TEXT,
                 tracking_number TEXT,
                 shipping_carrier TEXT,
                 printed_at TIMESTAMP,
@@ -616,6 +618,7 @@ def init_db() -> None:
         _add_column_if_missing("pedidos", "promocion_precio_centavos", "INTEGER")
         _add_column_if_missing("pedidos", "processing_lock", "INTEGER DEFAULT 0")
         _add_column_if_missing("pedidos", "processing_started_at", "TIMESTAMP")
+        _add_column_if_missing("pedidos", "shipping_country", "TEXT")
         _add_column_if_missing("pedidos", "tracking_number", "TEXT")
         _add_column_if_missing("pedidos", "shipping_carrier", "TEXT")
         _add_column_if_missing("pedidos", "printed_at", "TIMESTAMP")
@@ -673,6 +676,7 @@ def init_db() -> None:
                 promocion_precio_centavos INTEGER,
                 processing_lock INTEGER DEFAULT 0,
                 processing_started_at TEXT,
+                shipping_country TEXT,
                 tracking_number TEXT,
                 shipping_carrier TEXT,
                 printed_at TEXT,
@@ -763,6 +767,7 @@ def init_db() -> None:
         _add_column_if_missing("pedidos", "promocion_precio_centavos", "INTEGER")
         _add_column_if_missing("pedidos", "processing_lock", "INTEGER DEFAULT 0")
         _add_column_if_missing("pedidos", "processing_started_at", "TEXT")
+        _add_column_if_missing("pedidos", "shipping_country", "TEXT")
         _add_column_if_missing("pedidos", "tracking_number", "TEXT")
         _add_column_if_missing("pedidos", "shipping_carrier", "TEXT")
         _add_column_if_missing("pedidos", "printed_at", "TEXT")
@@ -839,6 +844,7 @@ def insert_pedido(
     tipo_producto: str = TIPO_PRODUCTO_DIGITAL,
     es_regalo: bool = False,
     dedicatoria: Optional[str] = None,
+    shipping_country: Optional[str] = None,
     estado: str = ESTADO_PENDIENTE_PAGO,
     precio_centavos: Optional[int] = None,
     promocion_codigo: Optional[str] = None,
@@ -847,11 +853,11 @@ def insert_pedido(
     sql = """
         INSERT INTO pedidos (
             nombre, apellidos, email, fecha_nacimiento, sexo, forma_trato, idioma,
-            producto, tipo_producto, es_regalo, dedicatoria, estado,
+            producto, tipo_producto, es_regalo, dedicatoria, shipping_country, estado,
             precio_centavos, promocion_codigo, promocion_precio_centavos,
             creado_en, actualizado_en
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     """
     if _use_postgres():
         sql += " RETURNING id"
@@ -870,6 +876,7 @@ def insert_pedido(
             normalizar_tipo_producto(tipo_producto),
             bool(es_regalo) if _use_postgres() else (1 if es_regalo else 0),
             dedicatoria,
+            shipping_country,
             estado,
             precio_centavos if precio_centavos is not None else PRECIO_NORMAL_CENTAVOS,
             promocion_codigo,
@@ -992,6 +999,7 @@ def update_pedido_campos(
         "promocion_precio_centavos",
         "processing_lock",
         "processing_started_at",
+        "shipping_country",
         "tracking_number",
         "shipping_carrier",
         "printed_at",

@@ -81,6 +81,11 @@
             <dt class="col-sm-4 text-muted">Producto</dt>
             <dd class="col-sm-8">{{ pedido["tipo_producto_label"] or "Solo PDF digital" }}</dd>
 
+            {% if pedido["tipo_producto"] == "impreso" %}
+              <dt class="col-sm-4 text-muted">País de envío</dt>
+              <dd class="col-sm-8">{{ "Estados Unidos" if pedido["shipping_country"] == "US" else (pedido["shipping_country"] or "—") }}</dd>
+            {% endif %}
+
             <dt class="col-sm-4 text-muted">Regalo</dt>
             <dd class="col-sm-8">{{ "Sí" if pedido["es_regalo"] else "No" }}</dd>
 

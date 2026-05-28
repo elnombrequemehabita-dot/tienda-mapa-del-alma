@@ -2970,6 +2970,24 @@ body::after {
   line-height: 1.35;
 }
 
+.printed-unavailable {
+  margin-top: .65rem;
+  border: 1px solid rgba(164, 55, 70, .32);
+  border-radius: 8px;
+  padding: .75rem .85rem;
+  background: rgba(255, 244, 244, .82);
+  color: #7b2630;
+  font-size: .92rem;
+  line-height: 1.45;
+}
+
+.btn-disabled,
+.btn-disabled:hover {
+  opacity: .58;
+  cursor: not-allowed;
+  transform: none;
+}
+
 @media (max-width: 720px) {
   .product-choice-grid {
     grid-template-columns: 1fr;

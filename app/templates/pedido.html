@@ -63,9 +63,26 @@
             />
             <span>
               <strong>Libro Impreso + PDF Digital incluido</strong>
-              <small>Incluye el PDF digital y el envío físico del libro personalizado. Precio: {{ precio_impreso }} USD.</small>
+              <small>Incluye el PDF digital y envío físico dentro de Estados Unidos. Precio: {{ precio_impreso }} USD.</small>
             </span>
           </label>
+        </div>
+      </div>
+
+      <div class="mb-2 mb-md-3" id="printed-country-wrap" {% if tipo_producto_selected != 'impreso' %}hidden{% endif %}>
+        <label class="form-label" for="shipping_country">País para envío del libro impreso</label>
+        <select class="form-select form-select-mystic" id="shipping_country" name="shipping_country">
+          <option value="" {% if not shipping_country_selected %}selected{% endif %}>Selecciona el país de envío</option>
+          <option value="US" {% if shipping_country_selected == 'US' %}selected{% endif %}>Estados Unidos</option>
+          <option value="OTHER" {% if shipping_country_selected and shipping_country_selected != 'US' %}selected{% endif %}>Otro país</option>
+        </select>
+        <div class="form-text">
+          El PDF digital está disponible para cualquier país. El libro impreso, por ahora, solo se envía dentro de Estados Unidos.
+        </div>
+        <div class="printed-unavailable" id="printed-unavailable" role="status" hidden>
+          No es un error de la página: por ahora el libro impreso solo se envía dentro de Estados Unidos.
+          El PDF digital sí está disponible para cualquier país y se entrega por correo electrónico.
+          Para continuar, elige <strong>Solo PDF Digital</strong>.
         </div>
       </div>
 
@@ -206,7 +223,7 @@
       </div>
 
       <div class="d-grid gap-2 mt-3">
-        <button class="btn-primary-lg w-100 border-0" type="submit">{{ t('pedido.submit') }}</button>
+        <button class="btn-primary-lg w-100 border-0" id="pedido-submit" type="submit">{{ t('pedido.submit') }}</button>
         <a class="btn-outline w-100 text-center" href="{{ url_for('main.index') }}">{{ t('pedido.back') }}</a>
       </div>
     </form>
@@ -215,12 +232,41 @@
     (function () {
       var select = document.getElementById("es_regalo");
       var wrap = document.getElementById("dedicatoria-wrap");
-      if (!select || !wrap) return;
       function syncGift() {
+        if (!select || !wrap) return;
         wrap.hidden = select.value !== "1";
       }
-      select.addEventListener("change", syncGift);
+      if (select) select.addEventListener("change", syncGift);
       syncGift();
+
+      var productRadios = document.querySelectorAll('input[name="tipo_producto"]');
+      var countryWrap = document.getElementById("printed-country-wrap");
+      var countrySelect = document.getElementById("shipping_country");
+      var unavailable = document.getElementById("printed-unavailable");
+      var submitButton = document.getElementById("pedido-submit");
+
+      function selectedProduct() {
+        var checked = document.querySelector('input[name="tipo_producto"]:checked');
+        return checked ? checked.value : "digital";
+      }
+
+      function syncPrintedCountry() {
+        var isPrinted = selectedProduct() === "impreso";
+        if (countryWrap) countryWrap.hidden = !isPrinted;
+
+        var blocked = isPrinted && countrySelect && countrySelect.value && countrySelect.value !== "US";
+        if (unavailable) unavailable.hidden = !blocked;
+        if (submitButton) {
+          submitButton.disabled = !!blocked;
+          submitButton.classList.toggle("btn-disabled", !!blocked);
+        }
+      }
+
+      productRadios.forEach(function (radio) {
+        radio.addEventListener("change", syncPrintedCountry);
+      });
+      if (countrySelect) countrySelect.addEventListener("change", syncPrintedCountry);
+      syncPrintedCountry();
     })();
   </script>
 {% endblock %}

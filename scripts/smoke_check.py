@@ -103,6 +103,7 @@ def check_database() -> None:
         "tipo_producto",
         "es_regalo",
         "dedicatoria",
+        "shipping_country",
         "tracking_number",
         "shipping_carrier",
         "printed_at",
@@ -353,6 +354,7 @@ def check_checkout_printed_product() -> None:
                 "email": "impresa@example.com",
                 "email_confirm": "impresa@example.com",
                 "tipo_producto": "impreso",
+                "shipping_country": "US",
                 "es_regalo": "1",
                 "dedicatoria": "Con amor para una persona especial.",
                 "acepta": "1",
@@ -371,15 +373,76 @@ def check_checkout_printed_product() -> None:
         metadata = captured.get("metadata") or {}
         if metadata.get("tipo_producto") != "impreso":
             raise SystemExit("[FAIL] checkout impreso no incluyo tipo_producto")
+        if metadata.get("shipping_country") != "US":
+            raise SystemExit("[FAIL] checkout impreso no incluyo pais de envio US")
         if metadata.get("promocion_codigo"):
             raise SystemExit("[FAIL] checkout impreso no debe consumir promoción digital")
 
         with app.app_context():
             pedido = database.list_pedidos(limit=1)[0]
-        if pedido["tipo_producto"] != "impreso" or not pedido["es_regalo"] or not pedido["dedicatoria"]:
-            raise SystemExit("[FAIL] pedido impreso no guardo producto/regalo/dedicatoria")
+        if (
+            pedido["tipo_producto"] != "impreso"
+            or pedido["shipping_country"] != "US"
+            or not pedido["es_regalo"]
+            or not pedido["dedicatoria"]
+        ):
+            raise SystemExit("[FAIL] pedido impreso no guardo producto/pais/regalo/dedicatoria")
 
         _ok("checkout impreso", f"Stripe recibio {database.PRECIO_IMPRESO_CENTAVOS} centavos y guardo dedicatoria")
+    finally:
+        routes.stripe.checkout.Session.create = original_create
+        if old_db_path is None:
+            os.environ.pop("SQLITE_DATABASE_PATH", None)
+        else:
+            os.environ["SQLITE_DATABASE_PATH"] = old_db_path
+
+
+def check_checkout_printed_international_block() -> None:
+    test_dir = PROJECT_ROOT / "output" / "smoke_tests"
+    test_dir.mkdir(parents=True, exist_ok=True)
+    test_db = test_dir / f"printed_block_{os.getpid()}.sqlite"
+
+    old_db_path = os.environ.get("SQLITE_DATABASE_PATH")
+    os.environ["SQLITE_DATABASE_PATH"] = str(test_db)
+
+    from app import create_app
+    from app import db as database
+    from app import routes
+
+    called = {"stripe": False}
+    original_create = routes.stripe.checkout.Session.create
+
+    def fake_create(**kwargs):
+        called["stripe"] = True
+        raise AssertionError("Stripe no debe llamarse para libro impreso fuera de Estados Unidos")
+
+    routes.stripe.checkout.Session.create = fake_create
+    try:
+        app = create_app()
+        with app.app_context():
+            database.init_db()
+
+        client = app.test_client()
+        response = client.post(
+            "/crear-checkout-session",
+            data={
+                "nombre": "Prueba",
+                "apellidos": "Internacional",
+                "email": "internacional@example.com",
+                "email_confirm": "internacional@example.com",
+                "tipo_producto": "impreso",
+                "shipping_country": "OTHER",
+                "acepta": "1",
+                "acepta_digital": "1",
+            },
+            follow_redirects=False,
+        )
+        if response.status_code == 303:
+            raise SystemExit("[FAIL] checkout impreso internacional no debe redirigir a Stripe")
+        if called["stripe"]:
+            raise SystemExit("[FAIL] checkout impreso internacional llamo a Stripe")
+
+        _ok("checkout impreso internacional", "bloqueado antes de Stripe")
     finally:
         routes.stripe.checkout.Session.create = original_create
         if old_db_path is None:
@@ -490,6 +553,7 @@ def main() -> int:
     check_checkout_promo_price()
     check_checkout_sold_out_price()
     check_checkout_printed_product()
+    check_checkout_printed_international_block()
     check_routes()
     check_pdf_generation()
     print("[OK] smoke check completo")
