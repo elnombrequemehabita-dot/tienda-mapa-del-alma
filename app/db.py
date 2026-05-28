@@ -292,7 +292,10 @@ def _migrate_pedido_aliases() -> None:
             (TIPO_PRODUCTO_DIGITAL,),
         )
     if "es_regalo" in columns:
-        _execute("UPDATE pedidos SET es_regalo = 0 WHERE es_regalo IS NULL")
+        if _use_postgres():
+            _execute("UPDATE pedidos SET es_regalo = FALSE WHERE es_regalo IS NULL")
+        else:
+            _execute("UPDATE pedidos SET es_regalo = 0 WHERE es_regalo IS NULL")
 
 
 def _migrate_resena_aliases() -> None:
@@ -798,7 +801,7 @@ def insert_pedido(
             idioma or "es",
             producto,
             normalizar_tipo_producto(tipo_producto),
-            1 if es_regalo else 0,
+            bool(es_regalo) if _use_postgres() else (1 if es_regalo else 0),
             dedicatoria,
             estado,
             precio_centavos if precio_centavos is not None else PRECIO_NORMAL_CENTAVOS,
@@ -940,6 +943,9 @@ def update_pedido_campos(
         # Si se pide limpiar el error, evitamos asignarlo dos veces.
         if key == "error" and clear_error:
             continue
+
+        if key == "es_regalo":
+            value = bool(_bool_from_db(value)) if _use_postgres() else (1 if _bool_from_db(value) else 0)
 
         if key in assigned:
             continue
