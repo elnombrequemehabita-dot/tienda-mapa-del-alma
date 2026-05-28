@@ -30,6 +30,13 @@
           Completados
         </a>
 
+        <a
+          class="btn-outline btn-sm py-2 {% if current_tab == 'impresos' %}active-admin-tab{% endif %}"
+          href="{{ url_for('main.admin_impresos') }}"
+        >
+          Impresos
+        </a>
+
         <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_resenas') }}">
           Reseñas
         </a>
@@ -70,6 +77,17 @@
 
             <dt class="col-sm-4 text-muted">Tratamiento</dt>
             <dd class="col-sm-8">{{ etiqueta_forma_trato(pedido["forma_trato"]) }}</dd>
+
+            <dt class="col-sm-4 text-muted">Producto</dt>
+            <dd class="col-sm-8">{{ pedido["tipo_producto_label"] or "Solo PDF digital" }}</dd>
+
+            <dt class="col-sm-4 text-muted">Regalo</dt>
+            <dd class="col-sm-8">{{ "Sí" if pedido["es_regalo"] else "No" }}</dd>
+
+            {% if pedido["dedicatoria"] %}
+              <dt class="col-sm-4 text-muted">Dedicatoria</dt>
+              <dd class="col-sm-8 text-break">{{ pedido["dedicatoria"] }}</dd>
+            {% endif %}
           </dl>
         </div>
 
@@ -80,7 +98,7 @@
             </h2>
 
             <p class="small text-muted mb-2">
-              Copia este enlace si el cliente no encuentra el correo con el enlace de descarga del PDF.
+              Copia este enlace si el cliente no encuentra el correo para dejar su reseña verificada.
             </p>
 
             <p class="small mono-small text-break mb-0">
@@ -115,11 +133,55 @@
                 <a href="{{ pedido['pdf_url'] }}" target="_blank" rel="noopener noreferrer">
                   {{ pedido["pdf_url"] }}
                 </a>
+                {% if pedido["pdf_path"] and pedido["tipo_producto"] == "impreso" %}
+                  <br />
+                  <a href="{{ url_for('main.admin_descarga_interior_tapa_dura', pedido_id=pedido['id']) }}" target="_blank" rel="noopener noreferrer">
+                    Interior tapa dura para imprenta
+                  </a>
+                  <br />
+                  <a href="{{ url_for('main.admin_descarga_pieza_cubierta_tapa_dura', pedido_id=pedido['id'], pieza='portada') }}" target="_blank" rel="noopener noreferrer">
+                    Portada 300 DPI
+                  </a>
+                  <br />
+                  <a href="{{ url_for('main.admin_descarga_pieza_cubierta_tapa_dura', pedido_id=pedido['id'], pieza='contraportada') }}" target="_blank" rel="noopener noreferrer">
+                    Contraportada 300 DPI
+                  </a>
+                  <br />
+                  <a href="{{ url_for('main.admin_descarga_pieza_cubierta_tapa_dura', pedido_id=pedido['id'], pieza='lomo') }}" target="_blank" rel="noopener noreferrer">
+                    Lomo 300 DPI
+                  </a>
+                  <br />
+                  <a href="{{ url_for('main.admin_descarga_cubierta_tapa_dura', pedido_id=pedido['id']) }}" target="_blank" rel="noopener noreferrer">
+                    Cubierta junta opcional
+                  </a>
+                {% endif %}
 
               {% elif pedido["pdf_path"] %}
                 <a href="{{ url_for('main.descarga_pdf', pedido_id=pedido['id']) }}" target="_blank" rel="noopener noreferrer">
                   {{ url_for('main.descarga_pdf', pedido_id=pedido['id']) }}
                 </a>
+                {% if pedido["tipo_producto"] == "impreso" %}
+                  <br />
+                  <a href="{{ url_for('main.admin_descarga_interior_tapa_dura', pedido_id=pedido['id']) }}" target="_blank" rel="noopener noreferrer">
+                    Interior tapa dura para imprenta
+                  </a>
+                  <br />
+                  <a href="{{ url_for('main.admin_descarga_pieza_cubierta_tapa_dura', pedido_id=pedido['id'], pieza='portada') }}" target="_blank" rel="noopener noreferrer">
+                    Portada 300 DPI
+                  </a>
+                  <br />
+                  <a href="{{ url_for('main.admin_descarga_pieza_cubierta_tapa_dura', pedido_id=pedido['id'], pieza='contraportada') }}" target="_blank" rel="noopener noreferrer">
+                    Contraportada 300 DPI
+                  </a>
+                  <br />
+                  <a href="{{ url_for('main.admin_descarga_pieza_cubierta_tapa_dura', pedido_id=pedido['id'], pieza='lomo') }}" target="_blank" rel="noopener noreferrer">
+                    Lomo 300 DPI
+                  </a>
+                  <br />
+                  <a href="{{ url_for('main.admin_descarga_cubierta_tapa_dura', pedido_id=pedido['id']) }}" target="_blank" rel="noopener noreferrer">
+                    Cubierta junta opcional
+                  </a>
+                {% endif %}
 
               {% elif pedido["estado"] == "pdf_generado_pendiente_de_link" %}
                 PDF generado, enlace pendiente
@@ -133,7 +195,100 @@
             <dt class="col-sm-4 text-muted">error_message</dt>
             <dd class="col-sm-8 text-break small">{{ pedido["error_message"] or "—" }}</dd>
 
+            <dt class="col-sm-4 text-muted">generation_status</dt>
+            <dd class="col-sm-8 mono-small">{{ pedido["generation_status"] or "—" }}</dd>
+
+            <dt class="col-sm-4 text-muted">json_path</dt>
+            <dd class="col-sm-8 text-break mono-small">{{ pedido["json_path"] or "—" }}</dd>
+
+            <dt class="col-sm-4 text-muted">raw_openai_path</dt>
+            <dd class="col-sm-8 text-break mono-small">{{ pedido["raw_openai_path"] or "—" }}</dd>
+
           </dl>
+        </div>
+
+        {% if pedido["tipo_producto"] == "impreso" %}
+          <div class="product-card mb-3">
+            <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">
+              Impresión y envío físico
+            </h2>
+
+            <dl class="row mb-3 small">
+              <dt class="col-sm-4 text-muted">Estado</dt>
+              <dd class="col-sm-8">
+                <span class="badge-estado" data-estado="{{ pedido['estado'] }}">{{ etiqueta_estado(pedido["estado"]) }}</span>
+              </dd>
+
+              <dt class="col-sm-4 text-muted">Impreso</dt>
+              <dd class="col-sm-8 mono-small">{{ pedido["printed_at"] or "—" }}</dd>
+
+              <dt class="col-sm-4 text-muted">Enviado</dt>
+              <dd class="col-sm-8 mono-small">{{ pedido["shipped_at"] or "—" }}</dd>
+
+              <dt class="col-sm-4 text-muted">Transportista</dt>
+              <dd class="col-sm-8">{{ pedido["shipping_carrier"] or "—" }}</dd>
+
+              <dt class="col-sm-4 text-muted">Tracking</dt>
+              <dd class="col-sm-8 mono-small text-break">{{ pedido["tracking_number"] or "—" }}</dd>
+            </dl>
+          </div>
+        {% endif %}
+
+        <div class="product-card mb-3">
+          <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">
+            Uso OpenAI / costo estimado
+          </h2>
+
+          <dl class="row mb-3 small">
+            <dt class="col-sm-5 text-muted">Modelo</dt>
+            <dd class="col-sm-7 mono-small">{{ pedido["openai_model"] or openai_usage.get("model") or "—" }}</dd>
+
+            <dt class="col-sm-5 text-muted">Llamadas</dt>
+            <dd class="col-sm-7 mono-small">{{ pedido["openai_call_count"] or openai_usage.get("call_count", 0) }}</dd>
+
+            <dt class="col-sm-5 text-muted">Tokens entrada</dt>
+            <dd class="col-sm-7 mono-small">{{ pedido["openai_input_tokens"] or openai_usage.get("input_tokens", 0) }}</dd>
+
+            <dt class="col-sm-5 text-muted">Tokens salida</dt>
+            <dd class="col-sm-7 mono-small">{{ pedido["openai_output_tokens"] or openai_usage.get("output_tokens", 0) }}</dd>
+
+            <dt class="col-sm-5 text-muted">Tokens total</dt>
+            <dd class="col-sm-7 mono-small">{{ pedido["openai_total_tokens"] or openai_usage.get("total_tokens", 0) }}</dd>
+
+            <dt class="col-sm-5 text-muted">Costo estimado</dt>
+            <dd class="col-sm-7 mono-small">${{ "%.6f"|format((pedido["openai_estimated_cost_usd"] or openai_usage.get("estimated_cost_usd", 0))|float) }}</dd>
+          </dl>
+
+          {% if openai_logs %}
+            <div class="table-responsive">
+              <table class="table table-sm small align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Tipo</th>
+                    <th>Modelo</th>
+                    <th>Tokens</th>
+                    <th>Costo</th>
+                    <th>Tiempo</th>
+                    <th>Reint.</th>
+                    <th>Secciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for log in openai_logs[:8] %}
+                    <tr>
+                      <td class="mono-small">{{ log["call_type"] }}</td>
+                      <td class="mono-small">{{ log["model"] }}</td>
+                      <td class="mono-small">{{ log["total_tokens"] or 0 }}</td>
+                      <td class="mono-small">${{ "%.6f"|format((log["estimated_cost_usd"] or 0)|float) }}</td>
+                      <td class="mono-small">{{ "%.2f"|format((log["duration_seconds"] or 0)|float) }}s</td>
+                      <td class="mono-small">{{ log["retry_count"] or 0 }}</td>
+                      <td class="mono-small text-break">{{ log["sections"] or "—" }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endif %}
         </div>
 
       </div>
@@ -185,22 +340,42 @@
               </button>
             </form>
 
+            <form method="post" action="{{ url_for('main.admin_pedido_reintentar_pdf_json', pedido_id=pedido['id']) }}">
+              <button type="submit" class="btn-outline w-100">
+                Reintentar PDF usando JSON existente
+              </button>
+            </form>
+
+            <form method="post" action="{{ url_for('main.admin_pedido_reparar_json', pedido_id=pedido['id']) }}">
+              <button type="submit" class="btn-outline w-100">
+                Reparar JSON
+              </button>
+            </form>
+
+            <form method="post" action="{{ url_for('main.admin_pedido_completar_secciones', pedido_id=pedido['id']) }}">
+              <button type="submit" class="btn-outline w-100">
+                Completar secciones faltantes
+              </button>
+            </form>
+
             <form method="post" action="{{ url_for('main.admin_pedido_marcar_revision_manual', pedido_id=pedido['id']) }}">
               <button type="submit" class="btn-outline w-100">
                 Marcar revisión manual
               </button>
             </form>
 
-            <form method="post" action="{{ url_for('main.admin_pedido_marcar_completado', pedido_id=pedido['id']) }}">
-              <button type="submit" class="btn-outline w-100">
-                Marcar completado
-              </button>
-            </form>
+            {% if pedido["tipo_producto"] != "impreso" %}
+              <form method="post" action="{{ url_for('main.admin_pedido_marcar_completado', pedido_id=pedido['id']) }}">
+                <button type="submit" class="btn-outline w-100">
+                  Marcar completado
+                </button>
+              </form>
+            {% endif %}
 
             {% if can_reenviar_notificaciones %}
               <form method="post" action="{{ url_for('main.admin_pedido_reenviar_notificaciones', pedido_id=pedido['id']) }}">
                 <button type="submit" class="btn-outline w-100">
-                  Reenviar notificaciones
+                  Reenviar email al cliente
                 </button>
               </form>
             {% endif %}
@@ -208,10 +383,57 @@
           </div>
         </div>
 
+        {% if pedido["tipo_producto"] == "impreso" %}
+          <div class="product-card mb-3">
+            <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">
+              Gestión física
+            </h2>
+            <p class="small text-muted">
+              El PDF generado ya es el interior del libro, sin portada ni contraportada.
+              Si tu imprenta pide archivos separados, descarga
+              <strong>Portada 300 DPI</strong>, <strong>Contraportada 300 DPI</strong>
+              y <strong>Lomo 300 DPI</strong>. La cubierta junta queda solo como opción.
+            </p>
+
+            <div class="d-grid gap-2">
+              <form method="post" action="{{ url_for('main.admin_pedido_marcar_impreso', pedido_id=pedido['id']) }}">
+                <button type="submit" class="btn-outline w-100">
+                  Marcar como impreso
+                </button>
+              </form>
+
+              <a class="btn-outline w-100 text-center" href="{{ url_for('main.admin_pedido_registrar_envio', pedido_id=pedido['id']) }}">
+                Registrar envío
+              </a>
+
+              <form method="post" action="{{ url_for('main.admin_pedido_marcar_entregado', pedido_id=pedido['id']) }}">
+                <button type="submit" class="btn-outline w-100">
+                  Marcar como entregado
+                </button>
+              </form>
+            </div>
+          </div>
+        {% endif %}
+
+        <div class="product-card mb-3">
+          <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">
+            Acción costosa
+          </h2>
+
+          <p class="small text-muted mb-3">
+            Esto genera una nueva llamada completa a OpenAI y puede tener costo. Úsalo solo si no existe JSON usable.
+          </p>
+
+          <form method="post" action="{{ url_for('main.admin_pedido_regenerar_contenido_openai', pedido_id=pedido['id']) }}">
+            <label class="form-label" for="confirmacion-regenerar">Escribe REGENERAR para confirmar</label>
+            <input class="form-control mb-2" id="confirmacion-regenerar" name="confirmacion" autocomplete="off" />
+            <button type="submit" class="btn-outline w-100">
+              Regenerar contenido completo con OpenAI
+            </button>
+          </form>
+        </div>
+
       </div>
     </div>
   </section>
-
-<!-- retry button update -->
 {% endblock %}
-<!-- CAMBIO GIT RETRY BUTTON -->

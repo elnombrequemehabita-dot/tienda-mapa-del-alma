@@ -218,6 +218,28 @@ def _build_admin_pdf_pendiente_link_body(pedido: Any, pdf_path: str) -> str:
     )
 
 
+def _build_admin_impresion_pendiente_body(pedido: Any) -> str:
+    dedicatoria = (_get(pedido, "dedicatoria") or "").strip()
+    lines = [
+        "Nueva orden de libro impreso pendiente de producción.",
+        "",
+        f"Pedido interno: #{_get(pedido, 'id')}",
+        f"Codigo de confirmacion: {_codigo_pedido(pedido)}",
+        f"Cliente: {_nombre_completo(pedido)}",
+        f"Email cliente: {_get(pedido, 'email')}",
+        f"Estado actual: {_get(pedido, 'estado')}",
+        f"PDF: {_get(pedido, 'drive_download_link') or _get(pedido, 'pdf_url') or _get(pedido, 'drive_view_link') or '(no disponible)'}",
+        f"Es regalo: {'sí' if _get(pedido, 'es_regalo') else 'no'}",
+    ]
+    if dedicatoria:
+        lines.extend(["", "Dedicatoria personalizada:", dedicatoria])
+    lines.extend([
+        "",
+        "Acción requerida: imprimir el PDF, marcar como impreso en admin y registrar tracking cuando se envíe.",
+    ])
+    return "\n".join(lines) + "\n"
+
+
 def _build_customer_body(pedido: Any, pdf_url: str, resena_url: str) -> str:
     nombre = _get(pedido, "nombre") or "alma bonita"
     full_name = _nombre_completo(pedido)
@@ -267,6 +289,50 @@ def _build_customer_html_body(pedido: Any, pdf_url: str, resena_url: str) -> str
 """.strip()
 
 
+def _build_customer_shipping_body(pedido: Any) -> str:
+    nombre = _get(pedido, "nombre") or "alma bonita"
+    carrier = _get(pedido, "shipping_carrier") or "Transportista"
+    tracking = _get(pedido, "tracking_number") or "(no disponible)"
+    lines = [
+        f"Hola {nombre},",
+        "",
+        "Tu libro ha sido enviado.",
+        "",
+        f"Transportista: {carrier}",
+        "",
+        "Número de seguimiento:",
+        str(tracking),
+        "",
+        "Puedes rastrear tu pedido con ese número en la web oficial del transportista.",
+        "",
+        "Tu PDF digital ya fue entregado por correo; este aviso corresponde al envío físico de tu libro personalizado.",
+        "",
+        "Gracias por confiar en Mapa del Alma.",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _build_customer_shipping_html(pedido: Any) -> str:
+    nombre = _get(pedido, "nombre") or "alma bonita"
+    carrier = _get(pedido, "shipping_carrier") or "Transportista"
+    tracking = _get(pedido, "tracking_number") or "(no disponible)"
+    codigo = _codigo_pedido(pedido)
+    return f"""
+<div style="font-family:Arial,Helvetica,sans-serif;color:#2f2a36;line-height:1.55;">
+  <h2 style="margin:0 0 12px;color:#243b7a;">Tu libro ha sido enviado</h2>
+  <p style="margin:0 0 14px;">Hola {nombre},</p>
+  <p style="margin:0 0 12px;">Tu libro impreso de <strong>Mapa del Alma</strong> ya está en camino.</p>
+  <div style="background:#faf7fd;border:1px solid #e7ddf2;border-radius:10px;padding:12px 14px;margin:0 0 16px;">
+    <p style="margin:0 0 6px;"><strong>Pedido:</strong> {codigo}</p>
+    <p style="margin:0 0 6px;"><strong>Transportista:</strong> {carrier}</p>
+    <p style="margin:0;"><strong>Número de seguimiento:</strong> {tracking}</p>
+  </div>
+  <p style="margin:0 0 12px;">Puedes rastrear tu pedido con ese número en la web oficial del transportista.</p>
+  <p style="margin:0;">Gracias por confiar en <strong>Mapa del Alma</strong>.</p>
+</div>
+""".strip()
+
+
 def _es_error_openai_credito_texto(texto: str) -> bool:
     lower = (texto or "").lower()
     claves = (
@@ -307,14 +373,35 @@ def _build_admin_error_body(order_id: int, stage: str, error_message: str, pedid
         acciones = [
             "Revisar Brevo API key, sender verificado y Authorized IPs.",
             "Confirmar que el pedido tenga enlace PDF.",
-            "Reintentar notificaciones desde el panel admin cuando esté corregido.",
+            "Usar 'Reenviar email al cliente' desde el panel admin cuando esté corregido.",
+        ]
+    elif "pdf" in stage_text:
+        titulo = "El pedido se cobró, pero falló la generación del PDF."
+        acciones = [
+            "Usar 'Reintentar PDF usando JSON existente'.",
+            "No regenerar contenido completo si ya existe JSON válido.",
+            "Si el JSON está roto, usar primero 'Reparar JSON'.",
+        ]
+    elif "json" in stage_text:
+        titulo = "El pedido se cobró, pero el JSON necesita reparación o secciones faltantes."
+        acciones = [
+            "Usar 'Reparar JSON' para intentar reparación local primero.",
+            "Si faltan secciones, usar 'Completar secciones faltantes'.",
+            "No usar 'Regenerar contenido completo con OpenAI' salvo que no haya JSON usable.",
+        ]
+    elif "drive" in stage_text:
+        titulo = "El pedido se cobró y el PDF puede existir, pero falló Google Drive."
+        acciones = [
+            "Revisar credenciales/permisos de Google Drive.",
+            "Usar 'Reintentar PDF usando JSON existente' para subir sin gastar OpenAI.",
+            "No regenerar contenido.",
         ]
     else:
         titulo = "Se produjo un error en el flujo post-pago del pedido."
         acciones = [
             "Revisar logs de Render para ver el traceback completo.",
             "Revisar el pedido en el panel admin.",
-            "Cuando el problema esté corregido, reintentar desde admin con 'Marcar como pagado'.",
+            "Si el error fue PDF/Drive/email, usar el botón específico para no gastar OpenAI.",
         ]
 
     parts = [
@@ -336,6 +423,11 @@ def _build_admin_error_body(order_id: int, stage: str, error_message: str, pedid
                 f"Cliente: {_nombre_completo(pedido)}",
                 f"Email cliente: {_get(pedido, 'email')}",
                 f"Estado actual: {_get(pedido, 'estado')}",
+                f"Llamadas OpenAI: {_get(pedido, 'openai_call_count', 0)}",
+                f"Costo estimado OpenAI USD: {_get(pedido, 'openai_estimated_cost_usd', 0)}",
+                f"json_path: {_get(pedido, 'json_path') or '(no disponible)'}",
+                f"raw_openai_path: {_get(pedido, 'raw_openai_path') or '(no disponible)'}",
+                f"generation_status: {_get(pedido, 'generation_status') or '(no disponible)'}",
             ]
         )
     return "\n".join(parts) + "\n"
@@ -465,6 +557,22 @@ def notify_admin_pdf_generado_sin_link(pedido: Any, pdf_path: str) -> bool:
         return False
 
 
+def notify_admin_impresion_pendiente(pedido: Any) -> bool:
+    try:
+        msg = EmailMessage()
+        codigo = _codigo_pedido(pedido)
+        msg["Subject"] = f"Libro impreso pendiente - Pedido #{_get(pedido, 'id')} [{codigo}] - Mapa del Alma"
+        msg["From"] = _email_sender()
+        msg["To"] = _admin_email()
+        msg.set_content(_build_admin_impresion_pendiente_body(pedido), charset="utf-8")
+        _send_message(msg)
+        logger.info("Aviso admin (impresión pendiente) enviado, pedido #%s", _get(pedido, "id"))
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.error("No se pudo enviar aviso admin (impresión pendiente): %s", exc, exc_info=False)
+        return False
+
+
 def send_customer_pdf_email(pedido: Any, *, pdf_url: str, resena_url: str) -> None:
     pdf_url = str(pdf_url or "").strip()
     resena_url = str(resena_url or "").strip()
@@ -485,6 +593,29 @@ def send_customer_pdf_email(pedido: Any, *, pdf_url: str, resena_url: str) -> No
         logger.info("Email de entrega enviado al cliente, pedido #%s", _get(pedido, "id"))
     except Exception as exc:  # noqa: BLE001
         logger.error("Fallo envío email de entrega al cliente (pedido #%s): %s", _get(pedido, "id"), exc)
+        raise
+
+
+def send_customer_shipping_email(pedido: Any) -> None:
+    tracking = str(_get(pedido, "tracking_number") or "").strip()
+    carrier = str(_get(pedido, "shipping_carrier") or "").strip()
+    if not tracking:
+        raise ValueError("No se puede enviar tracking sin número de seguimiento.")
+    if not carrier:
+        raise ValueError("No se puede enviar tracking sin transportista.")
+
+    try:
+        msg = EmailMessage()
+        codigo = _codigo_pedido(pedido)
+        msg["Subject"] = f"Tu libro ha sido enviado - Pedido #{_get(pedido, 'id')} [{codigo}]"
+        msg["From"] = _email_sender()
+        msg["To"] = _get(pedido, "email")
+        msg.set_content(_build_customer_shipping_body(pedido), charset="utf-8")
+        msg.add_alternative(_build_customer_shipping_html(pedido), subtype="html")
+        _send_message(msg)
+        logger.info("Email de tracking enviado al cliente, pedido #%s", _get(pedido, "id"))
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Fallo envío email tracking cliente (pedido #%s): %s", _get(pedido, "id"), exc)
         raise
 
 

@@ -10,10 +10,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from google.auth.transport.requests import Request
+from google.auth.exceptions import RefreshError
 from google.oauth2 import service_account
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError, ResumableUploadError
 from googleapiclient.http import MediaFileUpload
 
 
@@ -30,6 +32,10 @@ def _default_client_secret_path() -> Path:
 
 def _default_token_path() -> Path:
     return _project_root() / "secrets" / "google_drive_token.json"
+
+
+def _default_service_account_path() -> Path:
+    return _project_root() / "secrets" / "google_drive_service_account.json"
 
 
 def _client_secret_path() -> Path:
@@ -54,8 +60,32 @@ def _service_account_json_env() -> str:
     return (os.getenv("GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON") or "").strip()
 
 
+def _oauth_client_json_env() -> str:
+    return (os.getenv("GOOGLE_DRIVE_OAUTH_CLIENT_JSON") or "").strip()
+
+
+def _oauth_token_json_env() -> str:
+    return (os.getenv("GOOGLE_DRIVE_TOKEN_JSON") or "").strip()
+
+
 def _service_account_path() -> str:
-    return (os.getenv("GOOGLE_DRIVE_CREDENTIALS_PATH") or "").strip()
+    configured = (os.getenv("GOOGLE_DRIVE_CREDENTIALS_PATH") or "").strip()
+    if configured:
+        return configured
+
+    default = _default_service_account_path()
+    return str(default) if default.exists() else ""
+
+
+def _hay_oauth_env_configurado() -> bool:
+    return bool(_oauth_token_json_env())
+
+
+def _bool_env(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on", "si", "sí"}
 
 
 def _hay_service_account_configurada() -> bool:
@@ -102,8 +132,39 @@ def obtener_credenciales_service_account():
 
 
 def obtener_credenciales_oauth() -> Credentials:
+    raw_token = _oauth_token_json_env()
+    if raw_token:
+        try:
+            token_info = json.loads(raw_token)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                "GOOGLE_DRIVE_TOKEN_JSON no contiene JSON válido."
+            ) from exc
+
+        creds = Credentials.from_authorized_user_info(token_info, SCOPES)
+        if creds and creds.valid:
+            return creds
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            return creds
+        raise RuntimeError(
+            "GOOGLE_DRIVE_TOKEN_JSON no es válido o no contiene refresh_token."
+        )
+
     client_path = _client_secret_path()
     token_path = _token_path()
+
+    raw_client = _oauth_client_json_env()
+    if raw_client and not client_path.exists():
+        try:
+            client_info = json.loads(raw_client)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                "GOOGLE_DRIVE_OAUTH_CLIENT_JSON no contiene JSON válido."
+            ) from exc
+        flow = InstalledAppFlow.from_client_config(client_info, SCOPES)
+        creds = flow.run_local_server(port=0)
+        return creds
 
     if not client_path.exists():
         raise FileNotFoundError(
@@ -122,8 +183,16 @@ def obtener_credenciales_oauth() -> Credentials:
         return creds
 
     if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-    else:
+        try:
+            creds.refresh(Request())
+        except RefreshError:
+            creds = None
+
+    if creds is None or not creds.valid:
+        if _bool_env("GOOGLE_DRIVE_DISABLE_INTERACTIVE_OAUTH", False):
+            raise RuntimeError(
+                "OAuth de Google Drive no es válido y la reautorización interactiva está desactivada."
+            )
         flow = InstalledAppFlow.from_client_secrets_file(
             str(client_path),
             SCOPES,
@@ -144,14 +213,17 @@ def obtener_credenciales_oauth() -> Credentials:
 def obtener_servicio_drive_oauth():
     client_path = _client_secret_path()
 
-    if client_path.exists():
-        creds = obtener_credenciales_oauth()
-
-        return build(
-            "drive",
-            "v3",
-            credentials=creds,
-        )
+    oauth_error: Exception | None = None
+    if _hay_oauth_env_configurado() or client_path.exists():
+        try:
+            creds = obtener_credenciales_oauth()
+            return build(
+                "drive",
+                "v3",
+                credentials=creds,
+            )
+        except Exception as exc:  # noqa: BLE001
+            oauth_error = exc
 
     if _hay_service_account_configurada():
         creds = obtener_credenciales_service_account()
@@ -161,6 +233,9 @@ def obtener_servicio_drive_oauth():
             "v3",
             credentials=creds,
         )
+
+    if oauth_error is not None:
+        raise oauth_error
 
     raise FileNotFoundError(
         "No existe OAuth client y tampoco hay Service Account configurada."
@@ -223,12 +298,21 @@ def subir_pdf_a_drive_oauth(
         resumable=True,
     )
 
-    uploaded = service.files().create(
-        body=metadata,
-        media_body=media,
-        fields="id, webViewLink, webContentLink",
-        supportsAllDrives=True,
-    ).execute()
+    try:
+        uploaded = service.files().create(
+            body=metadata,
+            media_body=media,
+            fields="id, webViewLink, webContentLink",
+            supportsAllDrives=True,
+        ).execute()
+    except (HttpError, ResumableUploadError) as exc:
+        error_text = str(exc)
+        if "Service Accounts do not have storage quota" in error_text:
+            raise RuntimeError(
+                "Google Drive rechazó la subida con Service Account porque la carpeta está en Mi unidad. "
+                "Para vender en producción usa GOOGLE_DRIVE_TOKEN_JSON de OAuth o mueve la carpeta a una unidad compartida."
+            ) from exc
+        raise
 
     file_id = uploaded["id"]
 

@@ -81,7 +81,8 @@ def subir_pdf_a_drive(pdf_path, nombre_archivo=None):
     archivo = service.files().create(
         body=metadata,
         media_body=media,
-        fields="id, webViewLink, webContentLink"
+        fields="id, webViewLink, webContentLink",
+        supportsAllDrives=True
     ).execute()
 
     file_id = archivo["id"]
@@ -94,11 +95,13 @@ def subir_pdf_a_drive(pdf_path, nombre_archivo=None):
     service.permissions().create(
         fileId=file_id,
         body=permission,
+        supportsAllDrives=True
     ).execute()
 
     archivo_actualizado = service.files().get(
         fileId=file_id,
-        fields="id, webViewLink, webContentLink"
+        fields="id, webViewLink, webContentLink",
+        supportsAllDrives=True
     ).execute()
 
     return {

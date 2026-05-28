@@ -7,6 +7,28 @@ from __future__ import annotations
 
 from typing import Optional
 
+IDIOMA_DEFAULT = "es"
+
+IDIOMAS: tuple[str, ...] = (
+    "es",
+    "en",
+    "pt",
+    "fr",
+    "it",
+)
+
+IDIOMAS_ETIQUETAS: dict[str, str] = {
+    "es": "Español",
+    "en": "English",
+    "pt": "Português",
+    "fr": "Français",
+    "it": "Italiano",
+}
+
+IDIOMAS_OPCIONES: tuple[tuple[str, str], ...] = tuple(
+    (code, IDIOMAS_ETIQUETAS[code]) for code in IDIOMAS
+)
+
 # Valores permitidos para el campo «¿Cómo quieres que nos dirijamos a ti?»
 FORMAS_TRATO: tuple[str, ...] = (
     "femenino",
@@ -46,3 +68,19 @@ def normalizar_forma_trato(valor: Optional[str]) -> Optional[str]:
     if v not in FORMAS_TRATO:
         return None
     return v
+
+
+def normalizar_idioma(valor: Optional[str]) -> str:
+    v = (valor or "").strip().lower()
+    if not v:
+        return IDIOMA_DEFAULT
+    if v in IDIOMAS:
+        return v
+    corto = v.split("-", 1)[0].split("_", 1)[0]
+    if corto in IDIOMAS:
+        return corto
+    return IDIOMA_DEFAULT
+
+
+def etiqueta_idioma(valor: Optional[str]) -> str:
+    return IDIOMAS_ETIQUETAS.get(normalizar_idioma(valor), IDIOMAS_ETIQUETAS[IDIOMA_DEFAULT])

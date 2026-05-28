@@ -1,0 +1,14 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+secrets/
+output/
+instance/
+*.pdf
+*.sqlite
+*.db
+app/assets_backup/
+node_modules/
+tmp/

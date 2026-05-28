@@ -1,16 +1,74 @@
 {% extends "base.html" %}
 {% block title %}{{ t('pedido.title') }}{% endblock %}
 {% block content %}
+  {% set promo = promocion|default({}) %}
   <div class="py-3 py-md-4">
     <div class="text-center mb-3">
       <p class="hero-badge mb-2">{{ t('index.hero.price.name') }}</p>
       <h1 class="section-title mb-2">{{ t('pedido.header') }}</h1>
       <p class="text-muted mx-auto small form-intro">
-        {{ t('pedido.intro') }}
+        {{ t('pedido.intro') }} Puedes comprar desde cualquier país con tarjeta mediante Stripe.
       </p>
     </div>
 
+    <aside class="checkout-offer-summary" aria-label="Resumen de precio">
+      {% if promo.activa %}
+        <div>
+          <p class="checkout-offer-kicker">Promoción 11:11 activa para PDF digital</p>
+          <p class="checkout-offer-title">Precio 11:11 reservado al continuar al pago con la versión digital.</p>
+        </div>
+        <div class="checkout-offer-price">
+          <span class="checkout-offer-old">{{ promo.precio_normal }}</span>
+          <strong>{{ promo.precio_promo }}</strong>
+          <span>USD</span>
+        </div>
+        <p class="checkout-offer-spots">
+          Quedan {{ promo.restantes }} cupos disponibles.
+        </p>
+      {% else %}
+        <div>
+          <p class="checkout-offer-kicker">Precio actual</p>
+          <p class="checkout-offer-title">Mapa del Alma personalizado en PDF digital premium.</p>
+        </div>
+        <div class="checkout-offer-price">
+          <strong>{{ promo.precio_actual|default('$22.22') }}</strong>
+          <span>USD</span>
+        </div>
+      {% endif %}
+    </aside>
+
     <form class="form-shell form-shell-compact" method="post" action="{{ url_for('main.crear_checkout_session') }}" novalidate>
+      <div class="mb-3">
+        <label class="form-label">Elige tu versión</label>
+        <div class="product-choice-grid">
+          <label class="product-choice">
+            <input
+              type="radio"
+              name="tipo_producto"
+              value="digital"
+              {% if tipo_producto_selected != 'impreso' %}checked{% endif %}
+            />
+            <span>
+              <strong>Solo PDF Digital</strong>
+              <small>Entrega inmediata por correo electrónico.</small>
+            </span>
+          </label>
+
+          <label class="product-choice">
+            <input
+              type="radio"
+              name="tipo_producto"
+              value="impreso"
+              {% if tipo_producto_selected == 'impreso' %}checked{% endif %}
+            />
+            <span>
+              <strong>Libro Impreso + PDF Digital incluido</strong>
+              <small>Incluye el PDF digital y el envío físico del libro personalizado. Precio: {{ precio_impreso }} USD.</small>
+            </span>
+          </label>
+        </div>
+      </div>
+
       <div class="form-grid-2">
         <div class="mb-2 mb-md-3">
           <label class="form-label" for="nombre">{{ t('pedido.name') }}</label>
@@ -80,6 +138,15 @@
       </div>
 
       <div class="mb-2 mb-md-3">
+        <label class="form-label" for="idioma">Idioma del PDF</label>
+        <select class="form-select form-select-mystic" id="idioma" name="idioma">
+          {% for code, label in idiomas_opciones %}
+            <option value="{{ code }}" {% if idioma_selected == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="mb-2 mb-md-3">
         <label class="form-label" for="forma_trato">{{ t('pedido.form_of_address') }}</label>
         <select class="form-select form-select-mystic" id="forma_trato" name="forma_trato">
           <option value="" {% if not forma_trato_selected %}selected{% endif %}>{{ t('pedido.form_of_address_optional') }}</option>
@@ -87,6 +154,27 @@
             <option value="{{ code }}" {% if forma_trato_selected == code %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
+      </div>
+
+      <div class="mb-2 mb-md-3">
+        <label class="form-label" for="es_regalo">¿Es un regalo?</label>
+        <select class="form-select form-select-mystic" id="es_regalo" name="es_regalo">
+          <option value="0" {% if not es_regalo_prev %}selected{% endif %}>No</option>
+          <option value="1" {% if es_regalo_prev %}selected{% endif %}>Sí</option>
+        </select>
+      </div>
+
+      <div class="mb-2 mb-md-3" id="dedicatoria-wrap" {% if not es_regalo_prev %}hidden{% endif %}>
+        <label class="form-label" for="dedicatoria">Dedicatoria personalizada</label>
+        <textarea
+          class="form-control"
+          id="dedicatoria"
+          name="dedicatoria"
+          rows="4"
+          maxlength="500"
+          placeholder="Escribe aquí la dedicatoria que deseas integrar en la página personalizada."
+        >{{ dedicatoria or '' }}</textarea>
+        <div class="form-text">Máximo 500 caracteres. Aparecerá en la página personalizada del nombre.</div>
       </div>
 
       <div class="form-check form-check-legal mt-3">
@@ -123,4 +211,16 @@
       </div>
     </form>
   </div>
+  <script>
+    (function () {
+      var select = document.getElementById("es_regalo");
+      var wrap = document.getElementById("dedicatoria-wrap");
+      if (!select || !wrap) return;
+      function syncGift() {
+        wrap.hidden = select.value !== "1";
+      }
+      select.addEventListener("change", syncGift);
+      syncGift();
+    })();
+  </script>
 {% endblock %}

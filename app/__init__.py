@@ -1,6 +1,7 @@
 import os
 import logging
-from flask import Flask, render_template
+from flask import Flask, redirect, render_template, request
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app import db as database
 
@@ -12,6 +13,13 @@ def _bool_env(name: str, default: bool = False) -> bool:
     if value is None:
         return default
     return str(value).strip().lower() in {"1", "true", "yes", "on", "si", "sí"}
+
+
+def _int_env(name: str, default: int = 0) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return int(default)
 
 
 TRANSLATIONS_ES = {
@@ -147,6 +155,45 @@ def create_app():
         static_folder="static",
     )
 
+    trusted_proxy_count = _int_env("TRUSTED_PROXY_COUNT", 0)
+    if trusted_proxy_count > 0:
+        app.wsgi_app = ProxyFix(
+            app.wsgi_app,
+            x_for=trusted_proxy_count,
+            x_proto=trusted_proxy_count,
+            x_host=trusted_proxy_count,
+            x_port=trusted_proxy_count,
+            x_prefix=trusted_proxy_count,
+        )
+
+    session_cookie_secure = _bool_env("SESSION_COOKIE_SECURE", False)
+    app.config.update(
+        SESSION_COOKIE_SECURE=session_cookie_secure,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+        PREFERRED_URL_SCHEME="https" if session_cookie_secure else "http",
+    )
+
+    if _bool_env("ENFORCE_HTTPS", False):
+        @app.before_request
+        def _redirect_http_to_https():
+            if request.is_secure:
+                return None
+            if request.method not in {"GET", "HEAD"}:
+                return None
+            url = request.url.replace("http://", "https://", 1)
+            return redirect(url, code=301)
+
+    hsts_max_age = _int_env("HSTS_MAX_AGE", 0)
+    if session_cookie_secure and hsts_max_age > 0:
+        @app.after_request
+        def _add_hsts_header(response):
+            response.headers.setdefault(
+                "Strict-Transport-Security",
+                f"max-age={hsts_max_age}; includeSubDomains",
+            )
+            return response
+
     secret_key = (
         os.getenv("SECRET_KEY")
         or os.getenv("FLASK_SECRET_KEY")
@@ -183,7 +230,7 @@ def create_app():
 
     app.config["DATABASE"] = os.getenv(
         "SQLITE_DATABASE_PATH",
-        os.path.join(app.instance_path, "mapa_del_alma.sqlite"),
+        os.path.join(app.instance_path, "tienda.sqlite"),
     )
 
     try:
@@ -227,10 +274,6 @@ def create_app():
     @app.route("/preguntas")
     def preguntas():
         return render_template("preguntas.html")
-
-    @app.route("/resenas")
-    def resenas_publicas():
-        return render_template("resenas.html")
 
     @app.route("/health")
     def health():

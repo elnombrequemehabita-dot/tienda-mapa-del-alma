@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Impresos · Admin{% endblock %}
+{% block content %}
+  <section class="py-4 py-md-5">
+    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-md-between gap-3 mb-3">
+      <div>
+        <h1 class="section-title mb-1">Impresos</h1>
+        <p class="text-muted small mb-0">Producción manual, tracking y cierre de libros físicos.</p>
+      </div>
+      <div class="d-flex gap-2">
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_pedidos') }}">Pedidos</a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_completados') }}">Completados</a>
+        <a class="btn-outline btn-sm py-2 active-admin-tab" href="{{ url_for('main.admin_impresos') }}">Impresos</a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_resenas') }}">Reseñas</a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.index') }}">Tienda</a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_logout') }}">Salir</a>
+      </div>
+    </div>
+
+    <div class="product-card mb-3">
+      <h2 class="h6 mb-2" style="font-family: var(--font-display); color: var(--color-primary-dark)">
+        Impresión en tapa dura
+      </h2>
+      <p class="small text-muted mb-0">
+        Para tapa dura, la imprenta puede pedir el <strong>interior del libro</strong>
+        y la cubierta como piezas separadas.
+        El PDF del cliente ya es el interior del libro y no incluye portada ni contraportada.
+        Para imprimir, usa ese interior y descarga <strong>Portada 300 DPI</strong>,
+        <strong>Contraportada 300 DPI</strong> y <strong>Lomo 300 DPI</strong>.
+        La cubierta junta queda disponible solo si alguna imprenta la solicita.
+      </p>
+    </div>
+
+    {% if pedidos and pedidos|length > 0 %}
+      <div class="table-wrap">
+        <table class="table-mystic">
+          <thead>
+            <tr>
+              <th>Pedido</th>
+              <th>Cliente</th>
+              <th>Producto</th>
+              <th>Estado</th>
+              <th>PDF</th>
+              <th>Dedicatoria</th>
+              <th>Tracking</th>
+              <th>Transportista</th>
+              <th>Impreso</th>
+              <th>Enviado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in pedidos %}
+              <tr>
+                <td>
+                  <strong>#{{ p["id"] }}</strong><br />
+                  <span class="mono-small">{{ codigo_confirmacion_pedido(p["id"]) }}</span>
+                </td>
+                <td>
+                  {{ p["nombre"] or "—" }} {{ p["apellidos"] or "" }}<br />
+                  <a class="small" href="mailto:{{ p['email'] }}">{{ p["email"] }}</a>
+                </td>
+                <td class="small">{{ p["tipo_producto_label"] }}</td>
+                <td><span class="badge-estado" data-estado="{{ p['estado'] }}">{{ etiqueta_estado(p["estado"]) }}</span></td>
+                <td class="small text-break">
+                  {% if p["pdf_url"] %}
+                    <a href="{{ p['pdf_url'] }}" target="_blank" rel="noopener noreferrer">PDF cliente Drive</a><br />
+                  {% endif %}
+                  {% if p["pdf_path"] %}
+                    <a href="{{ url_for('main.descarga_pdf', pedido_id=p['id']) }}" target="_blank" rel="noopener noreferrer">PDF cliente</a><br />
+                    <a href="{{ url_for('main.admin_descarga_interior_tapa_dura', pedido_id=p['id']) }}" target="_blank" rel="noopener noreferrer">Interior tapa dura</a><br />
+                    <a href="{{ url_for('main.admin_descarga_pieza_cubierta_tapa_dura', pedido_id=p['id'], pieza='portada') }}" target="_blank" rel="noopener noreferrer">Portada 300 DPI</a><br />
+                    <a href="{{ url_for('main.admin_descarga_pieza_cubierta_tapa_dura', pedido_id=p['id'], pieza='contraportada') }}" target="_blank" rel="noopener noreferrer">Contraportada 300 DPI</a><br />
+                    <a href="{{ url_for('main.admin_descarga_pieza_cubierta_tapa_dura', pedido_id=p['id'], pieza='lomo') }}" target="_blank" rel="noopener noreferrer">Lomo 300 DPI</a><br />
+                    <a href="{{ url_for('main.admin_descarga_cubierta_tapa_dura', pedido_id=p['id']) }}" target="_blank" rel="noopener noreferrer">Cubierta junta opcional</a>
+                  {% elif not p["pdf_url"] %}
+                    —
+                  {% endif %}
+                </td>
+                <td class="small text-break">
+                  {% if p["dedicatoria"] %}
+                    <strong>Regalo:</strong> Sí<br />
+                    {{ p["dedicatoria"][:90] }}{% if p["dedicatoria"]|length > 90 %}…{% endif %}
+                  {% else %}
+                    Regalo: {{ "Sí" if p["es_regalo"] else "No" }}
+                  {% endif %}
+                </td>
+                <td class="mono-small text-break">{{ p["tracking_number"] or "—" }}</td>
+                <td>{{ p["shipping_carrier"] or "—" }}</td>
+                <td class="mono-small">{{ p["printed_at"] or "—" }}</td>
+                <td class="mono-small">{{ p["shipped_at"] or "—" }}</td>
+                <td>
+                  <div class="d-grid gap-1">
+                    <a class="btn-outline btn-sm py-2 text-nowrap d-inline-block" href="{{ url_for('main.admin_pedido_detail', pedido_id=p['id'], tab='impresos') }}">Ver</a>
+                    <form method="post" action="{{ url_for('main.admin_pedido_marcar_impreso', pedido_id=p['id']) }}">
+                      <button type="submit" class="btn btn-sm btn-outline-secondary w-100">Marcar impreso</button>
+                    </form>
+                    <a class="btn-outline btn-sm py-2 text-nowrap d-inline-block" href="{{ url_for('main.admin_pedido_registrar_envio', pedido_id=p['id']) }}">Registrar envío</a>
+                    <form method="post" action="{{ url_for('main.admin_pedido_marcar_entregado', pedido_id=p['id']) }}">
+                      <button type="submit" class="btn btn-sm btn-outline-secondary w-100">Marcar entregado</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="product-card text-center mb-0">
+        <p class="mb-0 text-muted">Aún no hay pedidos impresos.</p>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

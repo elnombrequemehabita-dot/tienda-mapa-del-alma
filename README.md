@@ -102,7 +102,7 @@ Las funciones viven en `app/order_services.py`:
 
 - `generar_pdf_automatico(order_id)`
 - `enviar_pdf_cliente(order_id, pdf_absolute_path)`
-- `procesar_post_pago(order_id, stripe_checkout_session_id=None)`
+- `procesar_post_pago(order_id)`
 
 Estas funciones actualizan `estado`, `pdf_path`, `error_message` y `updated_at` vía `app/db.py`.
 
@@ -164,3 +164,16 @@ O con script:
 ## Licencia
 
 Proyecto personal para tu tienda; ajusta este apartado como prefieras.
+
+
+## Código público de pedido
+
+Los clientes NO deben ver IDs internos reales.
+
+Formato visible recomendado:
+
+```text
+ALMA-590650
+```
+
+Esto protege la estructura interna de la base de datos.

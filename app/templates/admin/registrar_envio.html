@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Registrar envío · Pedido #{{ pedido["id"] }}{% endblock %}
+{% block content %}
+  <section class="py-4 py-md-5">
+    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-md-between gap-3 mb-4">
+      <div>
+        <p class="small text-muted mb-1">
+          <a href="{{ url_for('main.admin_pedido_detail', pedido_id=pedido['id'], tab='impresos') }}">← Volver al pedido</a>
+        </p>
+        <h1 class="section-title mb-1">Registrar envío</h1>
+        <p class="text-muted small mb-0">
+          Pedido #{{ pedido["id"] }} · {{ codigo_confirmacion_pedido(pedido["id"]) }} ·
+          <span class="badge-estado" data-estado="{{ pedido['estado'] }}">{{ etiqueta_estado(pedido["estado"]) }}</span>
+        </p>
+      </div>
+      <div class="d-flex gap-2">
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_impresos') }}">Impresos</a>
+        <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_pedidos') }}">Pedidos</a>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-12 col-lg-7">
+        <div class="product-card mb-3">
+          <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">
+            Datos del envío
+          </h2>
+
+          <form method="post" action="{{ url_for('main.admin_pedido_registrar_envio', pedido_id=pedido['id']) }}">
+            <div class="mb-3">
+              <label class="form-label" for="tracking_number">Número de seguimiento</label>
+              <input
+                class="form-control"
+                id="tracking_number"
+                name="tracking_number"
+                value="{{ pedido['tracking_number'] or '' }}"
+                autocomplete="off"
+                required
+              />
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label" for="shipping_carrier">Transportista</label>
+              <select class="form-select form-select-mystic" id="shipping_carrier" name="shipping_carrier" required>
+                {% for carrier in transportistas %}
+                  <option value="{{ carrier }}" {% if pedido["shipping_carrier"] == carrier %}selected{% endif %}>{{ carrier }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <button type="submit" class="btn-primary-lg border-0 w-100">
+              Guardar envío
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <div class="col-12 col-lg-5">
+        <div class="product-card mb-3">
+          <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">
+            Pedido
+          </h2>
+          <dl class="row mb-0 small">
+            <dt class="col-sm-5 text-muted">Cliente</dt>
+            <dd class="col-sm-7">{{ pedido["nombre"] }} {{ pedido["apellidos"] or "" }}</dd>
+
+            <dt class="col-sm-5 text-muted">Email</dt>
+            <dd class="col-sm-7"><a href="mailto:{{ pedido['email'] }}">{{ pedido["email"] }}</a></dd>
+
+            <dt class="col-sm-5 text-muted">Producto</dt>
+            <dd class="col-sm-7">{{ pedido["tipo_producto_label"] }}</dd>
+
+            <dt class="col-sm-5 text-muted">PDF</dt>
+            <dd class="col-sm-7">
+              {% if pedido["pdf_url"] %}
+                <a href="{{ pedido['pdf_url'] }}" target="_blank" rel="noopener noreferrer">Enlace Drive</a><br />
+              {% endif %}
+              {% if pedido["pdf_path"] %}
+                <a href="{{ url_for('main.descarga_pdf', pedido_id=pedido['id']) }}" target="_blank" rel="noopener noreferrer">PDF cliente</a><br />
+                <a href="{{ url_for('main.admin_descarga_interior_tapa_dura', pedido_id=pedido['id']) }}" target="_blank" rel="noopener noreferrer">Interior tapa dura</a><br />
+                <a href="{{ url_for('main.admin_descarga_pieza_cubierta_tapa_dura', pedido_id=pedido['id'], pieza='portada') }}" target="_blank" rel="noopener noreferrer">Portada 300 DPI</a><br />
+                <a href="{{ url_for('main.admin_descarga_pieza_cubierta_tapa_dura', pedido_id=pedido['id'], pieza='contraportada') }}" target="_blank" rel="noopener noreferrer">Contraportada 300 DPI</a><br />
+                <a href="{{ url_for('main.admin_descarga_pieza_cubierta_tapa_dura', pedido_id=pedido['id'], pieza='lomo') }}" target="_blank" rel="noopener noreferrer">Lomo 300 DPI</a><br />
+                <a href="{{ url_for('main.admin_descarga_cubierta_tapa_dura', pedido_id=pedido['id']) }}" target="_blank" rel="noopener noreferrer">Cubierta junta opcional</a>
+              {% else %}
+                —
+              {% endif %}
+            </dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}

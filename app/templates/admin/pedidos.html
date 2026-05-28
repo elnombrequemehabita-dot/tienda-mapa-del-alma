@@ -22,6 +22,12 @@
         >
           Completados
         </a>
+        <a
+          class="btn-outline btn-sm py-2 {% if current_tab == 'impresos' %}active-admin-tab{% endif %}"
+          href="{{ url_for('main.admin_impresos') }}"
+        >
+          Impresos
+        </a>
         <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_resenas') }}">Reseñas</a>
         <a class="btn-outline btn-sm py-2" href="{{ url_for('main.index') }}">Tienda</a>
         <a class="btn-outline btn-sm py-2" href="{{ url_for('main.admin_logout') }}">Salir</a>
@@ -41,6 +47,8 @@
               <th>Nombre</th>
               <th>Apellidos</th>
               <th>Email</th>
+              <th>Producto</th>
+              <th>Tracking</th>
               <th>Nac.</th>
               <th>Trato</th>
               <th>PDF</th>
@@ -63,6 +71,14 @@
                 <td>{{ p["nombre"] or "—" }}</td>
                 <td>{{ p["apellidos"] or "—" }}</td>
                 <td><a href="mailto:{{ p['email'] }}">{{ p["email"] }}</a></td>
+                <td class="small">{{ p["tipo_producto_label"] or "Solo PDF digital" }}</td>
+                <td class="small mono-small">
+                  {% if p["tracking_number"] %}
+                    {{ p["shipping_carrier"] or "—" }}<br />{{ p["tracking_number"] }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
                 <td class="mono-small">{{ p["fecha_nacimiento"] or "—" }}</td>
                 <td class="small">{{ etiqueta_forma_trato(p["forma_trato"]) }}</td>
                 <td class="small text-break">

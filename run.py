@@ -43,6 +43,11 @@ def _debug_env() -> None:
     logger.info("SECRET_KEY presente: %s", bool(os.environ.get("SECRET_KEY")))
     logger.info("FLASK_SECRET_KEY presente: %s", bool(os.environ.get("FLASK_SECRET_KEY")))
 
+logger.info("STRIPE_SECRET_KEY presente: %s", bool(os.environ.get("STRIPE_SECRET_KEY")))
+logger.info("STRIPE_PUBLIC_KEY presente: %s", bool(os.environ.get("STRIPE_PUBLIC_KEY")))
+logger.info("STRIPE_WEBHOOK_SECRET presente: %s", bool(os.environ.get("STRIPE_WEBHOOK_SECRET")))
+
+
 
 try:
     _debug_env()

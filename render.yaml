@@ -1,0 +1,71 @@
+services:
+  - type: web
+    name: mapa-del-alma
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m waitress --listen=0.0.0.0:$PORT run:app
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: FLASK_DEBUG
+        value: "0"
+      - key: TRUSTED_PROXY_COUNT
+        value: "1"
+      - key: SESSION_COOKIE_SECURE
+        value: "1"
+      - key: ENFORCE_HTTPS
+        value: "0"
+      - key: HSTS_MAX_AGE
+        value: "15552000"
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_ENABLE_REAL_ORDERS
+        value: "true"
+      - key: MAX_OPENAI_CALLS_PER_ORDER
+        value: "3"
+      - key: OPENAI_TEMPERATURE
+        value: "0.45"
+      - key: OPENAI_TIMEOUT_SEGUNDOS
+        value: "120"
+      - key: OPENAI_MAX_OUTPUT_TOKENS
+        value: "12000"
+      - key: MAX_REINTENTOS_BLOQUE
+        value: "0"
+      - key: DISABLE_GOOGLE_DRIVE
+        value: "0"
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: FLASK_ADMIN_PASSWORD
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: STRIPE_PUBLIC_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: EMAIL_SENDER
+        sync: false
+      - key: EMAIL_PASSWORD
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: GOOGLE_DRIVE_FOLDER_ID
+        sync: false
+      - key: GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: GOOGLE_DRIVE_OAUTH_CLIENT_JSON
+        sync: false
+      - key: GOOGLE_DRIVE_TOKEN_JSON
+        sync: false
+      - key: PRECIO_IMPRESO_CENTAVOS
+        sync: false

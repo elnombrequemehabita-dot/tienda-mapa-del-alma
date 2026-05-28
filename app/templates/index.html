@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ t('index.title') }}{% endblock %}
 {% block content %}
+  {% set promo = promocion|default({}) %}
 
   {# HOME CORTO PREMIUM — No contiene FAQ completa ni landing larga antigua #}
 
@@ -37,7 +38,7 @@
       <p class="hero-badge">Lectura privada premium · Creada una por una</p>
 
       <h1 id="titulo-inicio">
-        Tu nombre guarda una historia que nadie te había mostrado así.
+        Mapa del Alma personalizado
       </h1>
 
       <p class="hero-subline hero-subline-premium">
@@ -45,30 +46,49 @@
         tu esencia, tus patrones y la historia invisible que te acompaña.
       </p>
 
+      <div class="hero-value-strip" role="group" aria-label="Precio y beneficios principales">
+        <div class="hero-price-card hero-price-card-premium">
+          {% if promo.activa %}
+            <p class="promo-kicker">Promoción de lanzamiento 11:11</p>
+            <p class="hero-price-main"><span class="hero-price-name">Cupos disponibles</span></p>
+            <p class="hero-price-amount hero-price-amount-promo">
+              <span class="hero-price-old">{{ promo.precio_normal }}</span>
+              <span class="hero-price-value">{{ promo.precio_promo }}</span>
+              <span class="hero-price-currency">USD</span>
+            </p>
+            <div class="promo-availability" aria-live="polite">
+              <strong>Quedan {{ promo.restantes }}</strong>
+              libros digitales disponibles para esta promoción.
+            </div>
+            <div class="promo-progress" aria-hidden="true">
+              <span style="width: {{ promo.porcentaje_usado }}%"></span>
+            </div>
+            <p class="promo-fineprint">Cuando los cupos lleguen a 0, el precio vuelve automáticamente a {{ promo.precio_normal }}.</p>
+          {% else %}
+            <p class="hero-price-main"><span class="hero-price-name">Mapa del Alma personalizado</span></p>
+            <p class="hero-price-amount">
+              <span class="hero-price-value">{{ promo.precio_actual|default('$22.22') }}</span>
+              <span class="hero-price-currency">USD</span>
+            </p>
+            <p class="hero-price-delivery">PDF digital premium · Entrega por email</p>
+            <p class="promo-fineprint">La promoción 11:11 de lanzamiento ya terminó.</p>
+          {% endif %}
+        </div>
+
+        <ul class="hero-benefits hero-benefits-premium">
+          <li><span class="hero-benefits-mark" aria-hidden="true">✦</span> Más de 20 páginas personalizadas con diseño editorial</li>
+          <li><span class="hero-benefits-mark" aria-hidden="true">☾</span> Lectura simbólica creada con tus datos, no una plantilla genérica</li>
+          <li><span class="hero-benefits-mark" aria-hidden="true">✧</span> Link directo de descarga enviado a tu correo</li>
+        </ul>
+      </div>
+
       <div class="hero-cta-wrap hero-cta-wrap-premium">
         <div class="hero-cta">
-          <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">✨ Quiero descubrir mi mapa</a>
-          <a class="btn-outline" href="{{ url_for('main.vista_previa') }}">✧ Mirar dentro del mapa</a>
+          <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Quiero descubrir mi mapa</a>
+          <a class="btn-outline" href="{{ url_for('main.vista_previa') }}">Mirar dentro del mapa</a>
         </div>
-        <p class="hero-urgency">Entrega digital premium en 24–48 horas · Link directo por email</p>
+        <p class="hero-urgency">Entrega digital premium en 24–48 horas · Pago internacional con tarjeta vía Stripe</p>
       </div>
-    </div>
-
-    <div class="hero-value-strip" role="group" aria-label="Precio y beneficios principales">
-      <div class="hero-price-card hero-price-card-premium">
-        <p class="hero-price-main"><span class="hero-price-name">Mapa del Alma personalizado</span></p>
-        <p class="hero-price-amount">
-          <span class="hero-price-value">$27.00</span>
-          <span class="hero-price-currency">USD</span>
-        </p>
-        <p class="hero-price-delivery">PDF digital premium · Entrega por email</p>
-      </div>
-
-      <ul class="hero-benefits hero-benefits-premium">
-        <li><span class="hero-benefits-mark" aria-hidden="true">✦</span> Más de 20 páginas personalizadas con diseño editorial</li>
-        <li><span class="hero-benefits-mark" aria-hidden="true">☾</span> Lectura simbólica creada con tus datos, no una plantilla genérica</li>
-        <li><span class="hero-benefits-mark" aria-hidden="true">✧</span> Link directo de descarga enviado a tu correo</li>
-      </ul>
     </div>
   </section>
 
@@ -99,8 +119,8 @@
       </div>
 
       <div class="hero-cta mt-4">
-        <a class="btn-outline" href="{{ url_for('main.que_es') }}">☾ Conocer más</a>
-        <a class="btn-outline" href="{{ url_for('main.incluye') }}">❖ Ver qué incluye</a>
+        <a class="btn-outline" href="{{ url_for('main.que_es') }}">Conocer más</a>
+        <a class="btn-outline" href="{{ url_for('main.incluye') }}">Ver qué incluye</a>
       </div>
     </div>
   </section>
@@ -133,7 +153,7 @@
       </div>
 
       <div class="hero-cta mt-4">
-        <a class="btn-primary-lg" href="{{ url_for('main.vista_previa') }}">✧ Ver vista previa completa</a>
+        <a class="btn-primary-lg" href="{{ url_for('main.vista_previa') }}">Ver vista previa completa</a>
       </div>
     </div>
   </section>
@@ -157,7 +177,7 @@
 
       {% if resenas_aprobadas %}
         <div class="reviews-slide-grid reviews-slide-grid-home">
-          {% for r in resenas_aprobadas[:3] %}
+          {% for r in resenas_aprobadas %}
             <article class="review-card-public">
               <div class="review-card-public__stars" aria-hidden="true">
                 {% for _ in range(r.rating or 5) %}★{% endfor %}
@@ -176,8 +196,8 @@
       {% endif %}
 
       <div class="hero-cta mt-4">
-        <a class="btn-outline" href="{{ url_for('main.resenas_page') }}">♡ Ver todas las reseñas</a>
-        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">✨ Crear mi Mapa</a>
+        <a class="btn-outline" href="{{ url_for('main.resenas_page') }}">Ver todas las reseñas</a>
+        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Crear mi Mapa</a>
       </div>
     </div>
   </section>
@@ -187,7 +207,7 @@
       <p class="delivery-premium-kicker">Tu historia merece ser mirada con intención</p>
       <h2 id="cta-final-home" class="final-cta-text">Descubre lo que tu nombre viene diciendo en silencio.</h2>
       <div class="hero-cta mt-4">
-        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">✨ Quiero mi Mapa del Alma</a>
+        <a class="btn-primary-lg" href="{{ url_for('main.pedido') }}">Quiero mi Mapa del Alma</a>
         <a class="btn-outline" href="{{ url_for('main.preguntas') }}">? Preguntas frecuentes</a>
       </div>
     </div>

@@ -29,29 +29,58 @@ from flask import (
 
 from app import db as database
 from app import email_service
+from app.print_files import (
+    create_hardcover_cover_parts,
+    create_hardcover_cover_pdf,
+    create_hardcover_interior_pdf,
+)
 from app.review_token import pedido_id_desde_token, token_para_pedido
 from app.stripe_env import load_stripe_from_disk
 from app.formulario_cliente import (
     FORMAS_TRATO_OPCIONES,
+    IDIOMAS_OPCIONES,
     etiqueta_forma_trato,
+    normalizar_idioma,
     normalizar_forma_trato,
 )
 from app.order_services import (
+    completar_secciones_pedido,
     detectar_pedidos_atascados,
+    marcar_pedido_entregado,
+    marcar_pedido_impreso,
     procesar_post_pago,
+    regenerar_contenido_completo_pedido,
+    registrar_envio_pedido,
+    reintentar_pdf_usando_json,
+    reparar_json_pedido,
     reenviar_notificaciones_pedido,
 )
 from app.order_states import (
     ESTADO_COMPLETADO,
+    ESTADO_COMPLETANDO_SECCIONES,
+    ESTADO_ENTREGADO,
+    ESTADO_ERROR_DRIVE,
+    ESTADO_ERROR_EMAIL,
+    ESTADO_ENVIADO,
     ESTADO_ERROR_GENERACION,
     ESTADO_ERROR_ENVIO,
+    ESTADO_ERROR_JSON,
+    ESTADO_ERROR_OPENAI,
+    ESTADO_ERROR_PDF,
     ESTADO_ENVIANDO_EMAIL,
+    ESTADO_GENERANDO_CONTENIDO,
     ESTADO_GENERANDO_PDF,
+    ESTADO_IMPRESO,
+    ESTADO_NEEDS_ADMIN_REVIEW,
     ESTADO_PAGADO,
+    ESTADO_PDF_ENTREGADO,
     ESTADO_PDF_GENERADO,
     ESTADO_PDF_GENERADO_PENDIENTE_DE_LINK,
+    ESTADO_PENDIENTE_IMPRESION,
     ESTADO_PENDIENTE_PAGO,
+    ESTADO_REPARANDO_JSON,
     ESTADO_REVISION_MANUAL,
+    ESTADO_SUBIENDO_DRIVE,
     ORDER_STATES,
     estado_valido,
     etiqueta_estado,
@@ -60,23 +89,53 @@ from app.order_states import (
 bp = Blueprint("main", __name__)
 logger = logging.getLogger(__name__)
 
+REVIEW_ALLOWED_STATES = (
+    ESTADO_COMPLETADO,
+    ESTADO_PDF_ENTREGADO,
+    ESTADO_PENDIENTE_IMPRESION,
+    ESTADO_IMPRESO,
+    ESTADO_ENVIADO,
+    ESTADO_ENTREGADO,
+)
+
 ADMIN_MAIN_STATES = (
     ESTADO_PENDIENTE_PAGO,
     ESTADO_PAGADO,
+    ESTADO_GENERANDO_CONTENIDO,
+    ESTADO_REPARANDO_JSON,
+    ESTADO_COMPLETANDO_SECCIONES,
     ESTADO_GENERANDO_PDF,
+    ESTADO_SUBIENDO_DRIVE,
+    ESTADO_ERROR_OPENAI,
+    ESTADO_ERROR_JSON,
+    ESTADO_ERROR_PDF,
+    ESTADO_ERROR_DRIVE,
+    ESTADO_ERROR_EMAIL,
     ESTADO_ERROR_GENERACION,
     ESTADO_PDF_GENERADO,
     ESTADO_PDF_GENERADO_PENDIENTE_DE_LINK,
     ESTADO_ENVIANDO_EMAIL,
+    ESTADO_PDF_ENTREGADO,
+    ESTADO_PENDIENTE_IMPRESION,
+    ESTADO_IMPRESO,
+    ESTADO_ENVIADO,
     ESTADO_ERROR_ENVIO,
     ESTADO_REVISION_MANUAL,
+    ESTADO_NEEDS_ADMIN_REVIEW,
 )
 
 DELETABLE_STATES = (
     ESTADO_COMPLETADO,
+    ESTADO_ENTREGADO,
     ESTADO_ERROR_GENERACION,
     ESTADO_ERROR_ENVIO,
+    ESTADO_ERROR_OPENAI,
+    ESTADO_ERROR_JSON,
+    ESTADO_ERROR_PDF,
+    ESTADO_ERROR_DRIVE,
+    ESTADO_ERROR_EMAIL,
     ESTADO_REVISION_MANUAL,
+    ESTADO_NEEDS_ADMIN_REVIEW,
 )
 
 
@@ -127,12 +186,84 @@ def _ruta_pdf_local(pedido_id: int) -> Path:
     return (project_root / "output" / f"mapa_alma_{int(pedido_id)}.pdf").resolve()
 
 
+def _ruta_pdf_interior_tapa_dura(pedido_id: int) -> Path:
+    project_root = Path(current_app.root_path).parent
+    return (project_root / "output" / f"mapa_alma_{int(pedido_id)}_interior_tapa_dura.pdf").resolve()
+
+
+def _ruta_pdf_cubierta_tapa_dura(pedido_id: int) -> Path:
+    project_root = Path(current_app.root_path).parent
+    return (project_root / "output" / f"mapa_alma_{int(pedido_id)}_cubierta_tapa_dura.pdf").resolve()
+
+
+def _ruta_pieza_cubierta_tapa_dura(pedido_id: int, pieza: str) -> Path:
+    project_root = Path(current_app.root_path).parent
+    nombres = {
+        "portada": f"mapa_alma_{int(pedido_id)}_portada_8.5x11_300dpi.png",
+        "contraportada": f"mapa_alma_{int(pedido_id)}_contraportada_8.5x11_300dpi.png",
+        "lomo": f"mapa_alma_{int(pedido_id)}_lomo_300dpi.png",
+    }
+    if pieza not in nombres:
+        abort(404)
+    return (project_root / "output" / nombres[pieza]).resolve()
+
+
+def _precio_usd_centavos(centavos: int) -> str:
+    return f"${int(centavos) / 100:.2f}"
+
+
+def _normalizar_tipo_producto_form(value: Optional[str]) -> str:
+    return database.normalizar_tipo_producto(value)
+
+
+def _estado_promocion_inicio() -> dict:
+    try:
+        return database.get_promocion_inicio_estado()
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("No se pudo calcular la promoción de inicio: %s", exc)
+        return {
+            "codigo": database.PROMO_INICIO_CODIGO,
+            "limite": database.PROMO_INICIO_LIMITE,
+            "usados": 0,
+            "restantes": 0,
+            "activa": False,
+            "reserva_horas": database.PROMO_RESERVA_HORAS,
+            "porcentaje_usado": 100,
+            "precio_normal_centavos": database.PRECIO_NORMAL_CENTAVOS,
+            "precio_promo_centavos": database.PROMO_PRECIO_CENTAVOS,
+            "precio_actual_centavos": database.PRECIO_NORMAL_CENTAVOS,
+            "precio_normal": _precio_usd_centavos(database.PRECIO_NORMAL_CENTAVOS),
+            "precio_promo": _precio_usd_centavos(database.PROMO_PRECIO_CENTAVOS),
+            "precio_actual": _precio_usd_centavos(database.PRECIO_NORMAL_CENTAVOS),
+        }
+
+
+def _liberar_cupo_promocion_checkout(pedido_id: int) -> None:
+    try:
+        database.update_pedido_campos(
+            pedido_id,
+            precio_centavos=database.PRECIO_NORMAL_CENTAVOS,
+            promocion_codigo=None,
+            promocion_precio_centavos=None,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("No se pudo liberar cupo promocional del pedido %s: %s", pedido_id, exc)
+
+
 def _render_pedido_form(**ctx):
     base = {
         "formas_trato_opciones": FORMAS_TRATO_OPCIONES,
+        "idiomas_opciones": IDIOMAS_OPCIONES,
         "forma_trato_selected": "",
+        "idioma_selected": "es",
+        "tipo_producto_selected": database.TIPO_PRODUCTO_DIGITAL,
+        "precio_impreso": _precio_usd_centavos(database.PRECIO_IMPRESO_CENTAVOS),
+        "precio_impreso_centavos": database.PRECIO_IMPRESO_CENTAVOS,
+        "es_regalo_prev": False,
+        "dedicatoria": "",
         "acepta_prev": False,
         "acepta_digital_prev": False,
+        "promocion": _estado_promocion_inicio(),
     }
     base.update(ctx)
     return render_template("pedido.html", **base)
@@ -145,6 +276,12 @@ def _crear_checkout_desde_form():
     email_confirm = (request.form.get("email_confirm") or "").strip()
     fecha_nacimiento_raw = (request.form.get("fecha_nacimiento") or "").strip()
     forma_raw = request.form.get("forma_trato")
+    idioma_raw = request.form.get("idioma")
+    tipo_producto = _normalizar_tipo_producto_form(request.form.get("tipo_producto"))
+    es_regalo = (request.form.get("es_regalo") or "").strip().lower() in {"1", "si", "sí", "true", "yes"}
+    dedicatoria = (request.form.get("dedicatoria") or "").strip()
+    if not es_regalo:
+        dedicatoria = ""
     acepta = request.form.get("acepta")
     acepta_digital = request.form.get("acepta_digital")
 
@@ -165,6 +302,8 @@ def _crear_checkout_desde_form():
         errores.append(
             "Debes marcar la casilla que acepta las condiciones del producto digital (sin cambios, cancelaciones ni reembolsos tras iniciar la creación)."
         )
+    if es_regalo and len(dedicatoria) > 500:
+        errores.append("La dedicatoria debe tener 500 caracteres o menos.")
 
     fecha_nacimiento: Optional[str] = None
     if fecha_nacimiento_raw:
@@ -175,6 +314,7 @@ def _crear_checkout_desde_form():
             errores.append("La fecha de nacimiento no es válida.")
 
     forma_norm = normalizar_forma_trato(forma_raw)
+    idioma_norm = normalizar_idioma(idioma_raw)
     if (forma_raw or "").strip() and forma_norm is None:
         errores.append("Selecciona una opción válida para el tratamiento.")
 
@@ -188,9 +328,27 @@ def _crear_checkout_desde_form():
             email_confirm=email_confirm,
             fecha_nacimiento=fecha_nacimiento_raw,
             forma_trato_selected=forma_norm or "",
+            idioma_selected=idioma_norm,
+            tipo_producto_selected=tipo_producto,
+            es_regalo_prev=es_regalo,
+            dedicatoria=dedicatoria,
             acepta_prev=bool(acepta),
             acepta_digital_prev=bool(acepta_digital),
         )
+
+    promocion = _estado_promocion_inicio()
+    promocion_activa = bool(promocion.get("activa")) and tipo_producto == database.TIPO_PRODUCTO_DIGITAL
+    if tipo_producto == database.TIPO_PRODUCTO_IMPRESO:
+        precio_centavos = int(database.PRECIO_IMPRESO_CENTAVOS)
+        promocion_codigo = None
+        promocion_precio_centavos = None
+    else:
+        precio_centavos = int(
+            promocion.get("precio_promo_centavos" if promocion_activa else "precio_normal_centavos")
+            or database.PRECIO_NORMAL_CENTAVOS
+        )
+        promocion_codigo = str(promocion.get("codigo") or "") if promocion_activa else None
+        promocion_precio_centavos = precio_centavos if promocion_activa else None
 
     nuevo_id = database.insert_pedido(
         nombre=nombre,
@@ -198,9 +356,18 @@ def _crear_checkout_desde_form():
         email=email,
         fecha_nacimiento=fecha_nacimiento,
         forma_trato=forma_norm,
+        idioma=idioma_norm,
+        tipo_producto=tipo_producto,
+        es_regalo=es_regalo,
+        dedicatoria=dedicatoria if es_regalo and dedicatoria else None,
+        precio_centavos=precio_centavos,
+        promocion_codigo=promocion_codigo,
+        promocion_precio_centavos=promocion_precio_centavos,
     )
 
     if not _stripe_config_ok():
+        if promocion_activa:
+            _liberar_cupo_promocion_checkout(nuevo_id)
         flash(
             "Pago aún no configurado (faltan claves Stripe en .env o no se leyeron). "
             "Tu pedido quedó en pendiente de pago. Abre en el navegador (con Flask en modo debug): "
@@ -234,19 +401,35 @@ def _crear_checkout_desde_form():
                 "nombre": nombre,
                 "apellidos": apellidos,
                 "email": email,
+                "idioma": idioma_norm,
+                "tipo_producto": tipo_producto,
+                "es_regalo": "1" if es_regalo else "0",
+                "precio_centavos": str(precio_centavos),
+                "promocion_codigo": promocion_codigo or "",
+                "promocion_restantes_antes": str(promocion.get("restantes", "")),
             },
             line_items=[
                 {
                     "price_data": {
                         "currency": "usd",
-                        "product_data": {"name": "Mapa del Alma"},
-                        "unit_amount": 2700,
+                        "product_data": {
+                            "name": "Mapa del Alma - Libro impreso + PDF digital"
+                            if tipo_producto == database.TIPO_PRODUCTO_IMPRESO
+                            else (
+                                "Mapa del Alma - Promoción 11:11"
+                                if promocion_activa
+                                else "Mapa del Alma - PDF digital"
+                            )
+                        },
+                        "unit_amount": precio_centavos,
                     },
                     "quantity": 1,
                 }
             ],
         )
     except Exception as exc:  # noqa: BLE001
+        if promocion_activa:
+            _liberar_cupo_promocion_checkout(nuevo_id)
         flash(f"No se pudo iniciar el checkout con Stripe: {exc}", "error")
         return _render_pedido_form(
             nombre=nombre,
@@ -255,9 +438,21 @@ def _crear_checkout_desde_form():
             email_confirm=email_confirm,
             fecha_nacimiento=fecha_nacimiento_raw,
             forma_trato_selected=forma_norm or "",
+            idioma_selected=idioma_norm,
+            tipo_producto_selected=tipo_producto,
+            es_regalo_prev=es_regalo,
+            dedicatoria=dedicatoria,
             acepta_prev=bool(acepta),
             acepta_digital_prev=bool(acepta_digital),
         )
+
+    database.update_pedido_campos(
+        nuevo_id,
+        stripe_session_id=checkout_session.id,
+        precio_centavos=precio_centavos,
+        promocion_codigo=promocion_codigo,
+        promocion_precio_centavos=promocion_precio_centavos,
+    )
 
     return redirect(checkout_session.url, code=303)
 
@@ -416,6 +611,7 @@ def index():
         resenas_aprobadas=resenas_reales,
         resenas_resumen=resenas_resumen,
         resenas_carousel_slides=resenas_carousel_slides,
+        promocion=_estado_promocion_inicio(),
     )
 
 
@@ -434,9 +630,9 @@ def dejar_resena(token: str):
     if pedido is None:
         abort(404)
 
-    if pedido["estado"] != ESTADO_COMPLETADO:
+    if pedido["estado"] not in REVIEW_ALLOWED_STATES:
         flash(
-            "Solo pueden dejar reseña los clientes que ya recibieron su Mapa del Alma (pedido completado).",
+            "Solo pueden dejar reseña los clientes que ya recibieron su Mapa del Alma digital.",
             "error",
         )
         return redirect(url_for("main.index"))
@@ -659,10 +855,13 @@ def gracias():
         _sincronizar_post_pago_desde_return_stripe(pedido_id_final, stripe_session_id)
 
     codigo_confirmacion = _codigo_confirmacion_visible(pedido_id_final, stripe_session_id)
+    pedido = database.get_pedido_by_id(pedido_id_final) if pedido_id_final else None
 
     return render_template(
         "gracias.html",
         pedido_id=pedido_id_final,
+        pedido=pedido,
+        etiqueta_estado=etiqueta_estado,
         codigo_confirmacion=codigo_confirmacion,
     )
 
@@ -680,6 +879,120 @@ def descarga_pdf(pedido_id: int):
         mimetype="application/pdf",
         as_attachment=True,
         download_name=f"mapa_alma_{pedido_id}.pdf",
+    )
+
+
+@bp.route("/admin/pedidos/<int:pedido_id>/interior-tapa-dura")
+@admin_required
+def admin_descarga_interior_tapa_dura(pedido_id: int):
+    """
+    Archivo interior para imprenta de tapa dura.
+    El PDF generado ya no incluye portada ni contraportada; se normaliza sin quitar paginas.
+    """
+    pdf_path = _ruta_pdf_local(pedido_id)
+    if not pdf_path.exists() or not pdf_path.is_file():
+        abort(404, description=f"No existe PDF generado para el pedido #{pedido_id}.")
+
+    output_path = _ruta_pdf_interior_tapa_dura(pedido_id)
+    try:
+        if not output_path.exists() or output_path.stat().st_mtime < pdf_path.stat().st_mtime:
+            create_hardcover_interior_pdf(pdf_path, output_path)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("No se pudo crear interior tapa dura pedido #%s: %s", pedido_id, exc)
+        abort(500, description=f"No se pudo crear el interior de imprenta: {exc}")
+
+    return send_file(
+        str(output_path),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=f"mapa_alma_{pedido_id}_interior_tapa_dura.pdf",
+    )
+
+
+@bp.route("/admin/pedidos/<int:pedido_id>/cubierta-tapa-dura")
+@admin_required
+def admin_descarga_cubierta_tapa_dura(pedido_id: int):
+    """
+    Archivo de cubierta completa para imprenta de tapa dura:
+    contraportada + lomo + portada.
+    """
+    pdf_path = _ruta_pdf_local(pedido_id)
+    if not pdf_path.exists() or not pdf_path.is_file():
+        abort(404, description=f"No existe PDF generado para el pedido #{pedido_id}.")
+
+    assets_dir = Path(current_app.root_path) / "assets" / "imagenes"
+    portada = assets_dir / "portada.png"
+    contraportada = assets_dir / "contraportada.png"
+    lomo = assets_dir / "lomo.png"
+    output_path = _ruta_pdf_cubierta_tapa_dura(pedido_id)
+
+    try:
+        newest_asset_mtime = max(portada.stat().st_mtime, contraportada.stat().st_mtime, lomo.stat().st_mtime)
+        source_mtime = max(pdf_path.stat().st_mtime, newest_asset_mtime)
+        if not output_path.exists() or output_path.stat().st_mtime < source_mtime:
+            create_hardcover_cover_pdf(
+                pdf_path,
+                front_image=portada,
+                spine_image=lomo,
+                back_image=contraportada,
+                output_pdf=output_path,
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("No se pudo crear cubierta tapa dura pedido #%s: %s", pedido_id, exc)
+        abort(500, description=f"No se pudo crear la cubierta de imprenta: {exc}")
+
+    return send_file(
+        str(output_path),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=f"mapa_alma_{pedido_id}_cubierta_tapa_dura.pdf",
+    )
+
+
+@bp.route("/admin/pedidos/<int:pedido_id>/cubierta-tapa-dura/<pieza>")
+@admin_required
+def admin_descarga_pieza_cubierta_tapa_dura(pedido_id: int, pieza: str):
+    """
+    Piezas separadas para imprentas que piden portada, contraportada y lomo
+    como archivos individuales.
+    """
+    pieza = (pieza or "").strip().lower()
+    if pieza not in {"portada", "contraportada", "lomo"}:
+        abort(404)
+
+    assets_dir = Path(current_app.root_path) / "assets" / "imagenes"
+    portada = assets_dir / "portada.png"
+    contraportada = assets_dir / "contraportada.png"
+    lomo = assets_dir / "lomo.png"
+
+    project_root = Path(current_app.root_path).parent
+    output_dir = project_root / "output"
+    output_path = _ruta_pieza_cubierta_tapa_dura(pedido_id, pieza)
+
+    try:
+        newest_asset_mtime = max(portada.stat().st_mtime, contraportada.stat().st_mtime, lomo.stat().st_mtime)
+        if not output_path.exists() or output_path.stat().st_mtime < newest_asset_mtime:
+            create_hardcover_cover_parts(
+                front_image=portada,
+                spine_image=lomo,
+                back_image=contraportada,
+                output_dir=output_dir,
+                prefix=f"mapa_alma_{pedido_id}",
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("No se pudo crear pieza %s tapa dura pedido #%s: %s", pieza, pedido_id, exc)
+        abort(500, description=f"No se pudo crear la pieza de cubierta: {exc}")
+
+    etiquetas = {
+        "portada": "portada_8.5x11_300dpi",
+        "contraportada": "contraportada_8.5x11_300dpi",
+        "lomo": "lomo_300dpi",
+    }
+    return send_file(
+        str(output_path),
+        mimetype="image/png",
+        as_attachment=True,
+        download_name=f"mapa_alma_{pedido_id}_{etiquetas[pieza]}.png",
     )
 
 
@@ -869,6 +1182,20 @@ def admin_completados():
     )
 
 
+@bp.route("/admin/impresos")
+@admin_required
+def admin_impresos():
+    """Gestión manual de producción y envío de libros impresos."""
+    rows = database.list_pedidos_impresos(limit=500)
+    return render_template(
+        "admin/impresos.html",
+        pedidos=rows,
+        etiqueta_estado=etiqueta_estado,
+        current_tab="impresos",
+        codigo_confirmacion_pedido=database.codigo_confirmacion_pedido,
+    )
+
+
 @bp.route("/admin/resenas")
 @admin_required
 def admin_resenas():
@@ -939,15 +1266,26 @@ def admin_pedido_detail(pedido_id: int):
     tab_param = (request.args.get("tab") or "").strip()
     if tab_param in ("pedidos", "completados"):
         current_tab = tab_param
+    elif tab_param == "impresos":
+        current_tab = "impresos"
     else:
         current_tab = "completados" if pedido["estado"] == ESTADO_COMPLETADO else "pedidos"
-    back_url = url_for("main.admin_completados") if current_tab == "completados" else url_for("main.admin_pedidos")
-    back_label = "Volver a completados" if current_tab == "completados" else "Volver a pedidos"
+    if current_tab == "completados":
+        back_url = url_for("main.admin_completados")
+        back_label = "Volver a completados"
+    elif current_tab == "impresos":
+        back_url = url_for("main.admin_impresos")
+        back_label = "Volver a impresos"
+    else:
+        back_url = url_for("main.admin_pedidos")
+        back_label = "Volver a pedidos"
     resena_url = ""
-    if pedido["estado"] == ESTADO_COMPLETADO:
+    if pedido["estado"] in REVIEW_ALLOWED_STATES:
         tok = token_para_pedido(pedido_id, current_app.secret_key)
         resena_url = url_for("main.dejar_resena", token=tok, _external=True)
     notificaciones = database.list_notificaciones_pedido(pedido_id, limit=200)
+    openai_usage = database.get_openai_usage_summary(pedido_id) if hasattr(database, "get_openai_usage_summary") else {}
+    openai_logs = database.list_openai_usage_logs(pedido_id, limit=50) if hasattr(database, "list_openai_usage_logs") else []
     can_reenviar_notificaciones = "main.admin_pedido_reenviar_notificaciones" in current_app.view_functions
     return render_template(
         "admin/pedido_detail.html",
@@ -960,6 +1298,8 @@ def admin_pedido_detail(pedido_id: int):
         current_tab=current_tab,
         resena_url=resena_url,
         notificaciones=notificaciones,
+        openai_usage=openai_usage,
+        openai_logs=openai_logs,
         can_reenviar_notificaciones=can_reenviar_notificaciones,
         codigo_confirmacion_pedido=database.codigo_confirmacion_pedido,
     )
@@ -1097,6 +1437,74 @@ def admin_pedido_reintentar_post_pago(pedido_id: int):
     return redirect(url_for("main.admin_pedido_detail", pedido_id=pedido_id))
 
 
+@bp.route("/admin/pedidos/<int:pedido_id>/reintentar-pdf-json", methods=["POST"])
+@admin_required
+def admin_pedido_reintentar_pdf_json(pedido_id: int):
+    """Reintenta PDF/Drive usando JSON existente. No llama OpenAI."""
+    if database.get_pedido_by_id(pedido_id) is None:
+        flash("Pedido no encontrado.", "error")
+        return redirect(url_for("main.admin_pedidos"))
+    try:
+        reintentar_pdf_usando_json(pedido_id)
+        flash("PDF reintentado usando JSON existente. No se llamó OpenAI.", "success")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Reintento PDF con JSON falló pedido #%s: %s", pedido_id, exc)
+        flash(f"No se pudo reintentar PDF usando JSON existente: {exc}", "error")
+    return redirect(url_for("main.admin_pedido_detail", pedido_id=pedido_id))
+
+
+@bp.route("/admin/pedidos/<int:pedido_id>/reparar-json", methods=["POST"])
+@admin_required
+def admin_pedido_reparar_json(pedido_id: int):
+    """Repara JSON localmente primero y usa OpenAI solo si no hay alternativa."""
+    if database.get_pedido_by_id(pedido_id) is None:
+        flash("Pedido no encontrado.", "error")
+        return redirect(url_for("main.admin_pedidos"))
+    try:
+        reparar_json_pedido(pedido_id)
+        flash("JSON reparado o preparado para revisión. La reparación local se intentó primero.", "success")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Reparación JSON falló pedido #%s: %s", pedido_id, exc)
+        flash(f"No se pudo reparar el JSON: {exc}", "error")
+    return redirect(url_for("main.admin_pedido_detail", pedido_id=pedido_id))
+
+
+@bp.route("/admin/pedidos/<int:pedido_id>/completar-secciones", methods=["POST"])
+@admin_required
+def admin_pedido_completar_secciones(pedido_id: int):
+    """Completa solo secciones faltantes o inválidas."""
+    if database.get_pedido_by_id(pedido_id) is None:
+        flash("Pedido no encontrado.", "error")
+        return redirect(url_for("main.admin_pedidos"))
+    try:
+        completar_secciones_pedido(pedido_id)
+        flash("Secciones faltantes/invalidas completadas sin regenerar todo el libro.", "success")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Completar secciones falló pedido #%s: %s", pedido_id, exc)
+        flash(f"No se pudieron completar las secciones: {exc}", "error")
+    return redirect(url_for("main.admin_pedido_detail", pedido_id=pedido_id))
+
+
+@bp.route("/admin/pedidos/<int:pedido_id>/regenerar-contenido-openai", methods=["POST"])
+@admin_required
+def admin_pedido_regenerar_contenido_openai(pedido_id: int):
+    """Fuerza generación completa con OpenAI. Acción costosa e intencional."""
+    if database.get_pedido_by_id(pedido_id) is None:
+        flash("Pedido no encontrado.", "error")
+        return redirect(url_for("main.admin_pedidos"))
+    confirmacion = (request.form.get("confirmacion") or "").strip().upper()
+    if confirmacion != "REGENERAR":
+        flash("Confirmación inválida. Escribe REGENERAR para ejecutar una nueva llamada completa a OpenAI.", "error")
+        return redirect(url_for("main.admin_pedido_detail", pedido_id=pedido_id))
+    try:
+        regenerar_contenido_completo_pedido(pedido_id)
+        flash("Contenido regenerado completamente con OpenAI. Revisa costo acumulado.", "success")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Regeneración completa OpenAI falló pedido #%s: %s", pedido_id, exc)
+        flash(f"No se pudo regenerar contenido completo: {exc}", "error")
+    return redirect(url_for("main.admin_pedido_detail", pedido_id=pedido_id))
+
+
 @bp.route("/admin/pedidos/<int:pedido_id>/marcar-revision-manual", methods=["POST"])
 @admin_required
 def admin_pedido_marcar_revision_manual(pedido_id: int):
@@ -1138,13 +1546,67 @@ def admin_pedido_reenviar_notificaciones(pedido_id: int):
         flash("No hubo notificaciones aplicables para reenviar con el estado actual.", "info")
         return redirect(url_for("main.admin_pedido_detail", pedido_id=pedido_id))
 
-    ok_count = sum(1 for ok in resultados.values() if ok)
-    total = len(resultados)
-    if ok_count == total:
-        flash(f"Reenvío completado ({ok_count}/{total}).", "success")
+    if isinstance(resultados, dict) and resultados.get("ok"):
+        flash("Email reenviado al cliente correctamente.", "success")
     else:
-        flash(f"Reenvío parcial ({ok_count}/{total}); revisa historial para más detalle.", "error")
+        flash(f"Reenvío ejecutado: {resultados}", "info")
     return redirect(url_for("main.admin_pedido_detail", pedido_id=pedido_id))
+
+
+@bp.route("/admin/pedidos/<int:pedido_id>/marcar-impreso", methods=["POST"])
+@admin_required
+def admin_pedido_marcar_impreso(pedido_id: int):
+    try:
+        marcar_pedido_impreso(pedido_id)
+        flash("Pedido marcado como impreso.", "success")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("No se pudo marcar impreso pedido #%s: %s", pedido_id, exc)
+        flash(f"No se pudo marcar como impreso: {exc}", "error")
+    return redirect(url_for("main.admin_pedido_detail", pedido_id=pedido_id, tab="impresos"))
+
+
+@bp.route("/admin/pedidos/<int:pedido_id>/registrar-envio", methods=["GET", "POST"])
+@admin_required
+def admin_pedido_registrar_envio(pedido_id: int):
+    pedido = database.get_pedido_by_id(pedido_id)
+    if pedido is None:
+        flash("Pedido no encontrado.", "error")
+        return redirect(url_for("main.admin_impresos"))
+
+    if request.method == "POST":
+        tracking = (request.form.get("tracking_number") or "").strip()
+        carrier = (request.form.get("shipping_carrier") or "").strip()
+        try:
+            resultado = registrar_envio_pedido(pedido_id, tracking, carrier)
+            if resultado.get("email_cliente"):
+                flash("Envío registrado y email de tracking enviado al cliente.", "success")
+            else:
+                flash("Envío registrado, pero no se pudo enviar el email de tracking. Revisa configuración de email.", "error")
+            return redirect(url_for("main.admin_pedido_detail", pedido_id=pedido_id, tab="impresos"))
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("No se pudo registrar envío pedido #%s: %s", pedido_id, exc)
+            flash(f"No se pudo registrar el envío: {exc}", "error")
+
+    return render_template(
+        "admin/registrar_envio.html",
+        pedido=pedido,
+        transportistas=database.TRANSPORTISTAS_ENVIO,
+        etiqueta_estado=etiqueta_estado,
+        codigo_confirmacion_pedido=database.codigo_confirmacion_pedido,
+        current_tab="impresos",
+    )
+
+
+@bp.route("/admin/pedidos/<int:pedido_id>/marcar-entregado", methods=["POST"])
+@admin_required
+def admin_pedido_marcar_entregado(pedido_id: int):
+    try:
+        marcar_pedido_entregado(pedido_id)
+        flash("Pedido marcado como entregado.", "success")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("No se pudo marcar entregado pedido #%s: %s", pedido_id, exc)
+        flash(f"No se pudo marcar como entregado: {exc}", "error")
+    return redirect(url_for("main.admin_pedido_detail", pedido_id=pedido_id, tab="impresos"))
 
 
 def admin_redirect_back(pedido_id: int):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import time
@@ -12,20 +13,43 @@ from typing import Any, Dict, List, Optional, Tuple
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from app.openai_usage import (
+    assert_openai_call_allowed,
+    extract_usage_tokens,
+    record_openai_usage,
+    save_raw_openai_response,
+)
+
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
 OPENAI_TEMPERATURE = float(os.getenv("OPENAI_TEMPERATURE", "0.45"))
-MAX_REINTENTOS_BLOQUE = int(os.getenv("MAX_REINTENTOS_BLOQUE", "3"))
+MAX_REINTENTOS_BLOQUE = int(os.getenv("MAX_REINTENTOS_BLOQUE", "0"))
 ESPERA_REINTENTO_SEGUNDOS = float(os.getenv("ESPERA_REINTENTO_SEGUNDOS", "0.8"))
 OPENAI_TIMEOUT_SEGUNDOS = float(os.getenv("OPENAI_TIMEOUT_SEGUNDOS", "120"))
-OPENAI_MAX_OUTPUT_TOKENS = int(os.getenv("OPENAI_MAX_OUTPUT_TOKENS", "6500"))
+OPENAI_MAX_OUTPUT_TOKENS = int(os.getenv("OPENAI_MAX_OUTPUT_TOKENS", "12000"))
 
-if not OPENAI_API_KEY:
-    raise RuntimeError("Falta OPENAI_API_KEY en .env o en variables de entorno.")
+logger = logging.getLogger(__name__)
 
-client = OpenAI(api_key=OPENAI_API_KEY, timeout=OPENAI_TIMEOUT_SEGUNDOS)
+IDIOMAS_SOPORTADOS = {
+    "es": "español",
+    "en": "English",
+    "pt": "português",
+    "fr": "français",
+    "it": "italiano",
+}
+
+client: Optional[OpenAI] = None
+
+
+def _openai_client() -> OpenAI:
+    global client
+    if not OPENAI_API_KEY:
+        raise RuntimeError("Falta OPENAI_API_KEY en .env o en variables de entorno.")
+    if client is None:
+        client = OpenAI(api_key=OPENAI_API_KEY, timeout=OPENAI_TIMEOUT_SEGUNDOS)
+    return client
 
 SECCIONES_OBLIGATORIAS = [
     "mensaje_alma",
@@ -58,26 +82,25 @@ CAMPOS_OBLIGATORIOS = [
 ]
 
 # IMPORTANTE:
-# Antes se generaban bloques de 5 secciones. Eso hacia llamadas enormes,
-# respuestas lentas y JSON incompleto. Ahora se genera 1 seccion por llamada:
-# mas estable, mas controlable y con texto abundante por pagina.
-BLOQUES = [[sec] for sec in SECCIONES_OBLIGATORIAS]
+# Generación completa en 3 llamadas máximas: protege costos y respeta
+# MAX_OPENAI_CALLS_PER_ORDER=3 para pedidos automáticos.
+BLOQUES = [SECCIONES_OBLIGATORIAS[i : i + 7] for i in range(0, len(SECCIONES_OBLIGATORIAS), 7)]
 
 # Objetivo visual: cada pagina debe sentirse llena y premium.
 # Aproximado por seccion completa: 600 a 775 palabras.
 RANGOS_IDEALES = {
-    "primera_lectura": (225, 285),
-    "profundizacion": (235, 305),
-    "integracion": (140, 185),
+    "primera_lectura": (150, 190),
+    "profundizacion": (150, 195),
+    "integracion": (80, 110),
 }
 
 # Minimos duros: por debajo de esto la pagina puede verse vacia.
 RANGOS_DUROS = {
     # Mantiene paginas llenas, pero evita fallar por diferencias pequenas
     # como 194 vs 205 palabras cuando el texto sigue siendo usable/premium.
-    "primera_lectura": (180, 345),
-    "profundizacion": (180, 365),
-    "integracion": (95, 240),
+    "primera_lectura": (120, 245),
+    "profundizacion": (120, 255),
+    "integracion": (60, 150),
 }
 
 FRASES_PROHIBIDAS = [
@@ -261,6 +284,15 @@ def limpiar_texto(valor: Any) -> str:
     for a, b in reemplazos.items():
         texto = texto.replace(a, b)
     return re.sub(r"\s+", " ", texto).strip()
+
+
+def normalizar_idioma(valor: Any) -> str:
+    raw = limpiar_texto(valor).lower()
+    if not raw:
+        return "es"
+    raw = raw.replace("_", "-")
+    code = raw.split("-", 1)[0]
+    return code if code in IDIOMAS_SOPORTADOS else "es"
 
 
 def quitar_acentos(texto: str) -> str:
@@ -549,6 +581,7 @@ def crear_calculos(
     nombre_completo: Optional[str],
     fecha_nacimiento: Optional[str],
     sexo: str,
+    idioma: str = "es",
 ) -> Dict[str, Any]:
     nombre_limpio = limpiar_texto(nombre)
     nombre_completo_limpio = limpiar_texto(nombre_completo or nombre_limpio)
@@ -569,6 +602,8 @@ def crear_calculos(
         "nombre_completo": nombre_completo_limpio,
         "fecha_nacimiento": limpiar_texto(fecha_nacimiento or ""),
         "sexo": sexo_norm,
+        "idioma": normalizar_idioma(idioma),
+        "idioma_nombre": IDIOMAS_SOPORTADOS[normalizar_idioma(idioma)],
         "signo": signo,
         "elemento": elemento,
         "planeta_regente": planeta,
@@ -696,6 +731,8 @@ def _prompt_bloque(
     detalles = _detalles_secciones(secciones)
 
     sexo = calculos.get("sexo", "neutral")
+    idioma = normalizar_idioma(calculos.get("idioma"))
+    idioma_nombre = IDIOMAS_SOPORTADOS[idioma]
     if sexo == "femenino":
         regla_genero = (
             "La persona debe ser tratada en femenino cuando corresponda: ella, la, guiada, protegida, preparada, decidida. "
@@ -774,7 +811,7 @@ DISTRIBUCION DEL RITUAL:
     if "esencia_alma" in secciones:
         esencia_alma_extra = f"""
 INSTRUCCIONES OBLIGATORIAS PARA esencia_alma:
-Esta es una pagina nueva y especial del libro, ubicada despues de las 20 lecturas interiores y antes de la pagina de notas.
+Esta es la ultima pagina interior especial del libro, ubicada despues del mensaje final y antes de la contraportada.
 Debe sentirse aun mas valiosa que una seccion normal, como una hoja de vida emocional del alma.
 NO debe resumir todo el libro ni repetir lo ya escrito. Debe destilar la verdad central de la persona en una lectura elegante, concreta y memorable.
 
@@ -819,6 +856,11 @@ No estas llenando campos.
 Estas escribiendo paginas de un libro digital personalizado que una clienta pago para sentirse profundamente vista.
 Cada seccion debe sentirse como una pagina valiosa, no como relleno.
 
+IDIOMA OBLIGATORIO:
+Escribe absolutamente todo el contenido del JSON en {idioma_nombre}.
+No mezcles idiomas. Conserva los nombres propios tal como vienen en los datos.
+Si el idioma no es español, traduce el tono editorial, los matices y las instrucciones al idioma elegido sin sonar literal ni automático.
+
 DATOS DEL PERFIL:
 {datos}
 
@@ -852,8 +894,9 @@ REGLAS DE CALIDAD CONSTANTE:
 - OBLIGATORIO: incluye TODAS las secciones solicitadas en esta llamada. No omitas ninguna clave.
 - OBLIGATORIO: cada seccion debe incluir los 3 campos completos.
 - OBLIGATORIO: nunca devuelvas una seccion vacia ni resumida.
-- OBLIGATORIO: escribe contenido suficiente para llenar una pagina completa de PDF.
-- OBLIGATORIO: cada seccion completa debe sentirse como una pagina editorial terminada, no como una respuesta corta.
+- OBLIGATORIO: escribe contenido suficiente para una pagina editorial premium, legible y sin saturarla.
+- OBLIGATORIO: cada seccion completa debe sentirse como una pagina editorial terminada, no como una respuesta corta ni como texto inflado.
+- OBLIGATORIO: no repitas parrafos ni ideas casi identicas entre primera_lectura, profundizacion e integracion; cada campo debe avanzar el relato.
 
 EXTENSION IDEAL:
 - primera_lectura: {RANGOS_IDEALES["primera_lectura"][0]} a {RANGOS_IDEALES["primera_lectura"][1]} palabras.
@@ -895,10 +938,30 @@ def _extraer_json(texto: str) -> Dict[str, Any]:
         raise
 
 
-def llamar_openai(prompt: str) -> Dict[str, Any]:
+def llamar_openai(
+    prompt: str,
+    *,
+    order_id: Optional[int] = None,
+    call_type: str = "full_generation",
+    model: Optional[str] = None,
+    sections: Optional[List[str]] = None,
+    retry_count: int = 0,
+) -> Dict[str, Any]:
+    model_name = (model or OPENAI_MODEL).strip() or "gpt-4o-mini"
+    assert_openai_call_allowed(order_id, call_type)
+    started = time.perf_counter()
+    logger.info(
+        "OPENAI_CALL_STARTED order_id=%s call_type=%s model=%s sections=%s retry_count=%s",
+        order_id,
+        call_type,
+        model_name,
+        sections,
+        retry_count,
+    )
+
     try:
-        respuesta = client.responses.create(
-            model=OPENAI_MODEL,
+        respuesta = _openai_client().responses.create(
+            model=model_name,
             input=[
                 {
                     "role": "system",
@@ -915,8 +978,8 @@ def llamar_openai(prompt: str) -> Dict[str, Any]:
             response_format={"type": "json_object"},
         )
     except TypeError:
-        respuesta = client.responses.create(
-            model=OPENAI_MODEL,
+        respuesta = _openai_client().responses.create(
+            model=model_name,
             input=[
                 {
                     "role": "system",
@@ -932,12 +995,61 @@ def llamar_openai(prompt: str) -> Dict[str, Any]:
             max_output_tokens=OPENAI_MAX_OUTPUT_TOKENS,
             text={"format": {"type": "json_object"}},
         )
+    except Exception:
+        logger.exception(
+            "OPENAI_CALL_FAILED order_id=%s call_type=%s model=%s",
+            order_id,
+            call_type,
+            model_name,
+        )
+        raise
 
     texto = getattr(respuesta, "output_text", None)
     if not texto:
         texto = str(respuesta)
 
-    return _extraer_json(texto)
+    raw_path = save_raw_openai_response(order_id, call_type, texto)
+    input_tokens, output_tokens, total_tokens = extract_usage_tokens(respuesta)
+    duration_seconds = round(time.perf_counter() - started, 3)
+    estimated_cost = record_openai_usage(
+        order_id=order_id,
+        model=model_name,
+        call_type=call_type,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+        duration_seconds=duration_seconds,
+        retry_count=retry_count,
+        sections=sections,
+    )
+
+    try:
+        data = _extraer_json(texto)
+    except Exception:
+        logger.exception(
+            "OPENAI_CALL_FAILED order_id=%s call_type=%s model=%s raw_path=%s",
+            order_id,
+            call_type,
+            model_name,
+            raw_path,
+        )
+        raise
+
+    logger.info(
+        "OPENAI_CALL_FINISHED order_id=%s call_type=%s model=%s input_tokens=%s output_tokens=%s total_tokens=%s estimated_cost_usd=%s duration_seconds=%s retry_count=%s sections=%s raw_path=%s",
+        order_id,
+        call_type,
+        model_name,
+        input_tokens,
+        output_tokens,
+        total_tokens,
+        estimated_cost,
+        duration_seconds,
+        retry_count,
+        sections,
+        raw_path,
+    )
+    return data
 
 
 def _repeticion_excesiva(texto: str) -> bool:
@@ -1008,9 +1120,9 @@ def validar_campo(seccion: str, campo: str, valor: Any, sexo: str) -> List[str]:
     # por reintentos innecesarios de OpenAI.
     if seccion == "ritual_personalizado":
         limites_ritual = {
-            "primera_lectura": (145, 345),
-            "profundizacion": (145, 365),
-            "integracion": (80, 240),
+            "primera_lectura": (95, 230),
+            "profundizacion": (95, 240),
+            "integracion": (55, 140),
         }
         minimo, maximo = limites_ritual.get(campo, (minimo, maximo))
 
@@ -1158,6 +1270,8 @@ def _generar_seccion_individual_validada(
     calculos: Dict[str, Any],
     secciones_generadas: Dict[str, Dict[str, str]],
     errores_iniciales: Optional[Dict[str, Any]] = None,
+    order_id: Optional[int] = None,
+    call_type: str = "missing_sections",
 ) -> Dict[str, str]:
     """
     Recupera una seccion que falto o vino corta sin tirar todo el bloque.
@@ -1170,7 +1284,13 @@ def _generar_seccion_individual_validada(
     for intento in range(1, MAX_REINTENTOS_BLOQUE + 3):
         prompt = _prompt_reparar_seccion(seccion, calculos, secciones_generadas, errores_previos)
         try:
-            respuesta = llamar_openai(prompt)
+            respuesta = llamar_openai(
+                prompt,
+                order_id=order_id,
+                call_type=call_type,
+                sections=[seccion],
+                retry_count=intento - 1,
+            )
             errores, validas = validar_bloque(respuesta, [seccion], sexo)
             if seccion in validas and not errores:
                 return validas[seccion]
@@ -1193,6 +1313,8 @@ def generar_bloque_validado(
     secciones: List[str],
     calculos: Dict[str, Any],
     secciones_generadas: Dict[str, Dict[str, str]],
+    order_id: Optional[int] = None,
+    call_type: str = "full_generation",
 ) -> Dict[str, Dict[str, str]]:
     sexo = str(calculos.get("sexo", "neutral"))
     faltantes = list(secciones)
@@ -1210,7 +1332,13 @@ def generar_bloque_validado(
         )
 
         try:
-            respuesta = llamar_openai(prompt)
+            respuesta = llamar_openai(
+                prompt,
+                order_id=order_id,
+                call_type=call_type,
+                sections=list(faltantes),
+                retry_count=intento - 1,
+            )
             errores, validas = validar_bloque(respuesta, faltantes, sexo)
 
             for sec, contenido in validas.items():
@@ -1248,6 +1376,8 @@ def generar_bloque_validado(
             calculos,
             {**secciones_generadas, **resultado_bloque},
             errores_iniciales={sec: errores_rescate.get(sec, ultimo_error)},
+            order_id=order_id,
+            call_type="missing_sections",
         )
         resultado_bloque[sec] = contenido
 
@@ -1271,11 +1401,154 @@ def generar_bloque_validado(
         + json.dumps(ultimo_error, ensure_ascii=False)
     )
 
+
+def reparar_json_local_texto(raw_text: Any) -> Dict[str, Any]:
+    """
+    Reparación local de costo $0 para respuestas envueltas en markdown,
+    texto antes/después del JSON, comillas tipográficas y trailing commas.
+    """
+    text = str(raw_text or "").strip()
+    if not text:
+        raise ValueError("No hay texto JSON para reparar.")
+
+    replacements = {
+        "\ufeff": "",
+        "\u200b": "",
+        "“": '"',
+        "”": '"',
+        "‘": "'",
+        "’": "'",
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+
+    text = re.sub(r"^```(?:json)?", "", text, flags=re.IGNORECASE).strip()
+    text = re.sub(r"```$", "", text).strip()
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        text = text[start : end + 1]
+
+    text = re.sub(r",\s*([}\]])", r"\1", text)
+
+    missing_braces = text.count("{") - text.count("}")
+    missing_brackets = text.count("[") - text.count("]")
+    if missing_brackets > 0:
+        text += "]" * missing_brackets
+    if missing_braces > 0:
+        text += "}" * missing_braces
+
+    return json.loads(text)
+
+
+def reparar_json_con_openai(raw_text: Any, *, order_id: Optional[int] = None) -> Dict[str, Any]:
+    logger.info("OPENAI_REPAIR_STARTED order_id=%s", order_id)
+    prompt = (
+        "Corrige este JSON para que sea JSON válido. No reescribas el contenido. "
+        "No cambies el estilo. No agregues secciones nuevas. Devuelve solamente JSON válido.\n\n"
+        f"{str(raw_text or '')[:120000]}"
+    )
+    data = llamar_openai(prompt, order_id=order_id, call_type="json_repair", retry_count=0)
+    logger.info("OPENAI_REPAIR_FINISHED order_id=%s", order_id)
+    return data
+
+
+def _root_secciones(data: Any) -> Dict[str, Any]:
+    if not isinstance(data, dict):
+        return {}
+    secciones = data.get("secciones") or data.get("secciones_editoriales")
+    if isinstance(secciones, dict):
+        return secciones
+    if any(key in data for key in SECCIONES_OBLIGATORIAS):
+        return data
+    return {}
+
+
+def detectar_secciones_invalidas(data: Any, sexo: str = "neutral") -> Dict[str, List[str]]:
+    secciones = _root_secciones(data)
+    errores: Dict[str, List[str]] = {}
+    for sec in SECCIONES_OBLIGATORIAS:
+        node = secciones.get(sec)
+        err = validar_seccion(sec, node, normalizar_sexo(sexo))
+        if err:
+            errores[sec] = err
+    return errores
+
+
+def completar_secciones_faltantes(
+    datos: Dict[str, Any],
+    contenido_existente: Dict[str, Any],
+    secciones_faltantes: Optional[List[str]] = None,
+    *,
+    order_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    logger.info(
+        "OPENAI_MISSING_SECTIONS_STARTED order_id=%s requested=%s",
+        order_id,
+        secciones_faltantes,
+    )
+
+    nombre = limpiar_texto(datos.get("nombre") or datos.get("first_name") or "")
+    apellidos = limpiar_texto(datos.get("apellidos") or datos.get("last_name") or "")
+    nombre_completo = limpiar_texto(datos.get("nombre_completo") or f"{nombre} {apellidos}".strip())
+    fecha = limpiar_texto(datos.get("fecha_nacimiento") or datos.get("fecha") or datos.get("birthdate") or "")
+    sexo = limpiar_texto(datos.get("sexo") or datos.get("genero") or datos.get("gender") or datos.get("forma_trato") or "neutral")
+    idioma = normalizar_idioma(datos.get("idioma") or datos.get("language") or datos.get("locale") or "es")
+    calculos = contenido_existente.get("calculos") if isinstance(contenido_existente, dict) else None
+    if not isinstance(calculos, dict):
+        calculos = crear_calculos(nombre, nombre_completo or nombre, fecha or None, sexo, idioma)
+
+    secciones_actuales_raw = _root_secciones(contenido_existente)
+    sexo_norm = str(calculos.get("sexo") or normalizar_sexo(sexo))
+    secciones_validas: Dict[str, Dict[str, str]] = {}
+    for sec, node in secciones_actuales_raw.items():
+        if sec not in SECCIONES_OBLIGATORIAS:
+            continue
+        if not validar_seccion(sec, node, sexo_norm):
+            secciones_validas[sec] = {
+                campo: limpiar_texto(node.get(campo, ""))
+                for campo in CAMPOS_OBLIGATORIOS
+            }
+
+    if secciones_faltantes is None:
+        errores = detectar_secciones_invalidas({"secciones": secciones_actuales_raw}, sexo_norm)
+        secciones_faltantes = list(errores.keys())
+
+    pendientes = [sec for sec in SECCIONES_OBLIGATORIAS if sec in set(secciones_faltantes or [])]
+    for bloque in [pendientes[i : i + 7] for i in range(0, len(pendientes), 7)]:
+        if not bloque:
+            continue
+        generado = generar_bloque_validado(
+            bloque,
+            calculos,
+            secciones_validas,
+            order_id=order_id,
+            call_type="missing_sections",
+        )
+        secciones_validas.update(generado)
+
+    final = {
+        "tipo": "mapa_del_alma",
+        "version": "premium_json_reparado_fusionado",
+        "calculos": calculos,
+        "secciones": secciones_validas,
+        "secciones_editoriales": secciones_validas,
+    }
+    logger.info(
+        "OPENAI_MISSING_SECTIONS_FINISHED order_id=%s completed=%s",
+        order_id,
+        len(secciones_validas),
+    )
+    return final
+
+
 def generar_mapa_del_alma(
     nombre: str,
     nombre_completo: Optional[str] = None,
     fecha_nacimiento: Optional[str] = None,
     sexo: str = "neutral",
+    idioma: str = "es",
     pedido_id: Any = None,
     force_regenerate: bool = False,
 ) -> Dict[str, Any]:
@@ -1286,18 +1559,30 @@ def generar_mapa_del_alma(
         raise ValueError("Falta el nombre para generar el Mapa del Alma.")
 
     ruta_pedido = _ruta_json_pedido(pedido_id)
+    try:
+        order_id_int = int(pedido_id) if pedido_id is not None and limpiar_texto(pedido_id) else None
+    except (TypeError, ValueError):
+        order_id_int = None
+
     if ruta_pedido and not force_regenerate:
         existente = _cargar_json_si_existe(ruta_pedido)
         if existente:
+            logger.info("OPENAI_CALL_SKIPPED_JSON_EXISTS order_id=%s json_path=%s", order_id_int, ruta_pedido)
             existente["_json_guardado_en"] = str(ruta_pedido)
             existente["_reutilizado"] = True
             return existente
 
-    calculos = crear_calculos(nombre, nombre_completo, fecha_nacimiento, sexo)
+    calculos = crear_calculos(nombre, nombre_completo, fecha_nacimiento, sexo, idioma)
     secciones_finales: Dict[str, Dict[str, str]] = {}
 
     for bloque in BLOQUES:
-        generado = generar_bloque_validado(bloque, calculos, secciones_finales)
+        generado = generar_bloque_validado(
+            bloque,
+            calculos,
+            secciones_finales,
+            order_id=order_id_int,
+            call_type="full_generation",
+        )
         secciones_finales.update(generado)
 
         parcial_ok = {
@@ -1323,7 +1608,7 @@ def generar_mapa_del_alma(
 
     final = {
         "tipo": "mapa_del_alma",
-        "version": "premium_21_secciones_mas_notas_pdf",
+        "version": "premium_21_secciones_pdf_24_paginas",
         "calculos": calculos,
         "secciones": secciones_finales,
         "secciones_editoriales": secciones_finales,
@@ -1345,8 +1630,9 @@ def generar_contenido(
     nombre_completo: Optional[str] = None,
     fecha_nacimiento: Optional[str] = None,
     sexo: str = "neutral",
+    idioma: str = "es",
 ) -> Dict[str, Any]:
-    return generar_mapa_del_alma(nombre, nombre_completo, fecha_nacimiento, sexo)
+    return generar_mapa_del_alma(nombre, nombre_completo, fecha_nacimiento, sexo, idioma)
 
 
 def generar_texto_openai(
@@ -1354,8 +1640,9 @@ def generar_texto_openai(
     nombre_completo: Optional[str] = None,
     fecha_nacimiento: Optional[str] = None,
     sexo: str = "neutral",
+    idioma: str = "es",
 ) -> Dict[str, Any]:
-    return generar_mapa_del_alma(nombre, nombre_completo, fecha_nacimiento, sexo)
+    return generar_mapa_del_alma(nombre, nombre_completo, fecha_nacimiento, sexo, idioma)
 
 
 def generar_libro_nombre(
@@ -1363,8 +1650,9 @@ def generar_libro_nombre(
     nombre_completo: Optional[str] = None,
     fecha_nacimiento: Optional[str] = None,
     sexo: str = "neutral",
+    idioma: str = "es",
 ) -> Dict[str, Any]:
-    return generar_mapa_del_alma(nombre, nombre_completo, fecha_nacimiento, sexo)
+    return generar_mapa_del_alma(nombre, nombre_completo, fecha_nacimiento, sexo, idioma)
 
 
 def generar_contenido_mapa(datos: Optional[dict[str, Any]] = None, **kwargs: Any) -> Dict[str, Any]:
@@ -1376,6 +1664,7 @@ def generar_contenido_mapa(datos: Optional[dict[str, Any]] = None, **kwargs: Any
     nombre_completo = limpiar_texto(datos.get("nombre_completo") or f"{nombre} {apellidos}".strip())
     fecha = limpiar_texto(datos.get("fecha_nacimiento") or datos.get("fecha") or datos.get("birthdate") or "")
     sexo = limpiar_texto(datos.get("sexo") or datos.get("genero") or datos.get("gender") or datos.get("forma_trato") or "neutral")
+    idioma = normalizar_idioma(datos.get("idioma") or datos.get("language") or datos.get("locale") or "es")
     pedido_id = datos.get("pedido_id") or datos.get("order_id") or datos.get("id")
     force_regenerate = bool(datos.get("force_regenerate") or datos.get("regenerar"))
 
@@ -1387,6 +1676,7 @@ def generar_contenido_mapa(datos: Optional[dict[str, Any]] = None, **kwargs: Any
         nombre_completo=nombre_completo or nombre,
         fecha_nacimiento=fecha or None,
         sexo=sexo,
+        idioma=idioma,
         pedido_id=pedido_id,
         force_regenerate=force_regenerate,
     )

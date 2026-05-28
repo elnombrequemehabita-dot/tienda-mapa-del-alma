@@ -356,3 +356,16 @@ def tr(key: str, **kwargs) -> str:
         except Exception:
             return text
     return text
+
+
+def obtener_traduccion(clave: str, lang: str = DEFAULT_LANG) -> str:
+    """
+    Devuelve una traducción segura.
+    Si falta la clave o idioma, devuelve la clave original.
+    """
+    item = TRANSLATIONS.get(clave)
+
+    if not item:
+        return clave
+
+    return item.get(lang) or item.get(DEFAULT_LANG) or clave
