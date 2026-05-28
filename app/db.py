@@ -712,6 +712,13 @@ def init_db() -> None:
         """)
 
         _execute("""
+            CREATE TABLE IF NOT EXISTS analytics_resets (
+                period_key TEXT PRIMARY KEY,
+                reset_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        _execute("""
             CREATE TABLE IF NOT EXISTS resenas (
                 id SERIAL PRIMARY KEY,
                 pedido_id INTEGER,
@@ -905,6 +912,13 @@ def init_db() -> None:
         """)
 
         _execute("""
+            CREATE TABLE IF NOT EXISTS analytics_resets (
+                period_key TEXT PRIMARY KEY,
+                reset_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        _execute("""
             CREATE TABLE IF NOT EXISTS resenas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 pedido_id INTEGER,
@@ -995,6 +1009,7 @@ def init_db() -> None:
     _execute("CREATE INDEX IF NOT EXISTS idx_site_events_created_at ON site_events (created_at)")
     _execute("CREATE INDEX IF NOT EXISTS idx_site_events_type ON site_events (event_type)")
     _execute("CREATE INDEX IF NOT EXISTS idx_site_events_visitor ON site_events (visitor_hash)")
+    _execute("CREATE INDEX IF NOT EXISTS idx_analytics_resets_period ON analytics_resets (period_key)")
 
     _commit()
     logger.info("Tablas %s verificadas correctamente.", "PostgreSQL" if _use_postgres() else "SQLite")
@@ -1489,10 +1504,62 @@ def record_site_event(
             pass
 
 
-def get_analytics_summary(days: int = 14) -> dict[str, Any]:
+def reset_analytics_counter(period_key: str) -> None:
+    key = str(period_key or "mes").strip().lower()
+    if key not in {"dia", "semana", "mes", "ano"}:
+        key = "mes"
+    if _use_postgres():
+        _execute(
+            """
+            INSERT INTO analytics_resets (period_key, reset_at)
+            VALUES (?, CURRENT_TIMESTAMP)
+            ON CONFLICT (period_key)
+            DO UPDATE SET reset_at = EXCLUDED.reset_at
+            """,
+            (key,),
+        )
+    else:
+        _execute(
+            """
+            INSERT INTO analytics_resets (period_key, reset_at)
+            VALUES (?, CURRENT_TIMESTAMP)
+            ON CONFLICT(period_key)
+            DO UPDATE SET reset_at = excluded.reset_at
+            """,
+            (key,),
+        )
+    _commit()
+
+
+def get_analytics_reset_at(period_key: str) -> Optional[datetime]:
+    key = str(period_key or "mes").strip().lower()
+    row = _fetchone(
+        "SELECT reset_at FROM analytics_resets WHERE period_key = ?",
+        (key,),
+    )
+    if not row:
+        return None
+    return _parse_datetime(row["reset_at"])
+
+
+def get_analytics_summary(days: int = 14, period_key: str = "", since_date: Optional[Any] = None) -> dict[str, Any]:
     days = max(1, min(int(days or 14), 90))
-    since = datetime.now(timezone.utc) - timedelta(days=days - 1)
+    if since_date is not None:
+        if isinstance(since_date, datetime):
+            since = since_date if since_date.tzinfo else since_date.replace(tzinfo=timezone.utc)
+        else:
+            parsed_since = _parse_datetime(str(since_date))
+            since = parsed_since or (datetime.now(timezone.utc) - timedelta(days=days - 1))
+    else:
+        since = datetime.now(timezone.utc) - timedelta(days=days - 1)
+
+    reset_at = get_analytics_reset_at(period_key) if period_key else None
+    if reset_at and reset_at > since:
+        since = reset_at
+
     since_date = since.date()
+    now_date = datetime.now(timezone.utc).date()
+    days = max(1, min((now_date - since_date).days + 1, 370))
 
     event_rows = _fetchall(
         """
@@ -1502,7 +1569,7 @@ def get_analytics_summary(days: int = 14) -> dict[str, Any]:
         ORDER BY created_at DESC
         LIMIT 20000
         """,
-        (since_date.isoformat(),),
+        (since.isoformat(timespec="seconds"),),
     )
     order_rows = list_pedidos(limit=5000)
 
@@ -1674,6 +1741,9 @@ def get_analytics_summary(days: int = 14) -> dict[str, Any]:
 
     return {
         "days": days,
+        "period_key": period_key or "",
+        "reset_at": reset_at.isoformat(timespec="seconds") if reset_at else "",
+        "since": since.isoformat(timespec="seconds"),
         "rows": rows,
         "totals": totals,
         "stripe_fee_note": f"Stripe estimado por defecto: {STRIPE_FEE_PERCENT:.2f}% + {format_usd_centavos(STRIPE_FEE_FIXED_CENTAVOS)}. Puedes corregirlo manualmente por pedido.",

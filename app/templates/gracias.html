@@ -19,12 +19,14 @@
         <div class="checkout-offer-summary text-start mb-4" aria-label="Estado del pedido">
           <div>
             <p class="checkout-offer-kicker mb-1">Estado actual</p>
-            <p class="checkout-offer-title mb-0">{{ etiqueta_estado(pedido["estado"]) }}</p>
+            <p class="checkout-offer-title mb-1">{{ customer_status.title }}</p>
+            <p class="small text-muted mb-0">{{ customer_status.message }}</p>
           </div>
           {% if pedido["tracking_number"] %}
             <p class="checkout-offer-spots mb-0">
               {{ pedido["shipping_carrier"] }} · {{ pedido["tracking_number"] }}
               {% if pedido["shipped_at"] %}<br />Enviado: {{ pedido["shipped_at"] }}{% endif %}
+              {% if pedido["tracking_url"] %}<br /><a href="{{ pedido['tracking_url'] }}" target="_blank" rel="noopener noreferrer">Ver rastreo oficial</a>{% endif %}
             </p>
           {% endif %}
         </div>

@@ -319,7 +319,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "gracias.confirmed": {"es": "Pedido confirmado", "en": "Order confirmed", "pt": "Pedido confirmado"},
     "gracias.header": {"es": "Gracias por tu pedido", "en": "Thank you for your order", "pt": "Obrigado pelo seu pedido"},
     "gracias.msg": {
-        "es": "Hemos registrado tu solicitud de Mapa del Alma. Si el pago queda confirmado, procesaremos tu pedido y recibirás por correo un enlace de descarga directa de tu PDF.",
+        "es": "Hemos registrado tu solicitud de Mapa del Alma. Si el pago fue confirmado, prepararemos tu pedido y recibirás por correo las novedades de entrega.",
         "en": "We have registered your Soul Map request. If payment is confirmed, we will process your order and email you a direct download link to your PDF.",
         "pt": "Registramos sua solicitação do Mapa da Alma. Se o pagamento for confirmado, processaremos seu pedido e você receberá por e-mail um link direto para baixar seu PDF.",
     },

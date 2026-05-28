@@ -9,7 +9,7 @@ import hashlib
 import os
 import secrets
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
 from typing import Optional
@@ -135,17 +135,7 @@ ADMIN_MAIN_STATES = (
 )
 
 DELETABLE_STATES = (
-    ESTADO_COMPLETADO,
-    ESTADO_ENTREGADO,
-    ESTADO_ERROR_GENERACION,
-    ESTADO_ERROR_ENVIO,
-    ESTADO_ERROR_OPENAI,
-    ESTADO_ERROR_JSON,
-    ESTADO_ERROR_PDF,
-    ESTADO_ERROR_DRIVE,
-    ESTADO_ERROR_EMAIL,
-    ESTADO_REVISION_MANUAL,
-    ESTADO_NEEDS_ADMIN_REVIEW,
+    *ORDER_STATES,
 )
 
 
@@ -254,6 +244,96 @@ def _money_form_centavos(name: str, default: int = 0) -> int:
     if raw is None or str(raw).strip() == "":
         return int(default or 0)
     return _money_to_centavos(raw)
+
+
+def _customer_order_status(pedido: Optional[dict]) -> dict[str, str]:
+    if not pedido:
+        return {
+            "title": "Pedido recibido",
+            "message": "Hemos registrado tu solicitud. Si el pago fue confirmado, prepararemos tu PDF y te avisaremos por correo.",
+        }
+
+    estado = str(pedido.get("estado") or "").strip().lower()
+    tipo = database.normalizar_tipo_producto(pedido.get("tipo_producto"))
+    error_states = {
+        ESTADO_ERROR_GENERACION,
+        ESTADO_ERROR_ENVIO,
+        ESTADO_ERROR_OPENAI,
+        ESTADO_ERROR_JSON,
+        ESTADO_ERROR_PDF,
+        ESTADO_ERROR_DRIVE,
+        ESTADO_ERROR_EMAIL,
+        ESTADO_REVISION_MANUAL,
+        ESTADO_NEEDS_ADMIN_REVIEW,
+    }
+
+    if estado == ESTADO_PENDIENTE_PAGO:
+        return {
+            "title": "Pedido registrado",
+            "message": "Cuando Stripe confirme el pago, prepararemos tu Mapa del Alma y te enviaremos novedades por correo.",
+        }
+    if estado in error_states:
+        return {
+            "title": "Pago recibido, pedido en preparación",
+            "message": "Tu pedido está seguro. Estamos preparando tu Mapa del Alma y te contactaremos por correo si necesitamos confirmar algún detalle.",
+        }
+    if estado in {ESTADO_PAGADO, ESTADO_GENERANDO_CONTENIDO, ESTADO_REPARANDO_JSON, ESTADO_COMPLETANDO_SECCIONES, ESTADO_GENERANDO_PDF, ESTADO_SUBIENDO_DRIVE, ESTADO_ENVIANDO_EMAIL, ESTADO_PDF_GENERADO, ESTADO_PDF_GENERADO_PENDIENTE_DE_LINK}:
+        return {
+            "title": "Pago confirmado",
+            "message": "Tu PDF digital está en preparación. La entrega digital estimada es de 24 a 48 horas después de confirmarse el pago.",
+        }
+    if estado in {ESTADO_PDF_ENTREGADO, ESTADO_COMPLETADO}:
+        return {
+            "title": "PDF digital entregado",
+            "message": "El enlace de descarga del PDF fue enviado a tu correo. Recuerda descargarlo dentro de las 48 horas.",
+        }
+    if tipo == database.TIPO_PRODUCTO_IMPRESO and estado == ESTADO_PENDIENTE_IMPRESION:
+        return {
+            "title": "PDF entregado, libro físico en producción",
+            "message": "Tu PDF digital ya fue enviado. El libro físico se envía a imprimir dentro de las primeras 48 horas; el tiempo de llegada dependerá del transportista y la distancia.",
+        }
+    if tipo == database.TIPO_PRODUCTO_IMPRESO and estado == ESTADO_IMPRESO:
+        return {
+            "title": "Libro impreso preparado",
+            "message": "Tu PDF digital ya fue enviado y el libro físico está listo para envío. Te avisaremos por correo cuando exista número de tracking.",
+        }
+    if tipo == database.TIPO_PRODUCTO_IMPRESO and estado == ESTADO_ENVIADO:
+        return {
+            "title": "Libro físico enviado",
+            "message": "Tu libro físico ya está en camino. Usa el número de tracking para ver las actualizaciones oficiales del transportista.",
+        }
+    if tipo == database.TIPO_PRODUCTO_IMPRESO and estado == ESTADO_ENTREGADO:
+        return {
+            "title": "Pedido entregado",
+            "message": "El pedido figura como entregado. Gracias por confiar en Mapa del Alma.",
+        }
+
+    return {
+        "title": "Pedido en preparación",
+        "message": "Tu pedido está registrado y en seguimiento. Te enviaremos novedades por correo.",
+    }
+
+
+def _analytics_period_config(periodo: str) -> dict[str, object]:
+    now = datetime.now(timezone.utc)
+    key = str(periodo or "mes").strip().lower()
+    if key not in {"dia", "semana", "mes", "ano"}:
+        key = "mes"
+    if key == "dia":
+        since = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        label = "Hoy"
+    elif key == "semana":
+        start = now - timedelta(days=now.weekday())
+        since = start.replace(hour=0, minute=0, second=0, microsecond=0)
+        label = "Esta semana"
+    elif key == "ano":
+        since = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        label = "Este año"
+    else:
+        since = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        label = "Este mes"
+    days = max(1, min((now.date() - since.date()).days + 1, 370))
+    return {"key": key, "since": since, "days": days, "label": label}
 
 
 def _admin_login_is_limited(ip: str) -> bool:
@@ -909,9 +989,9 @@ def _sincronizar_post_pago_desde_return_stripe(pedido_id: int, stripe_session_id
 
     if row["estado"] in (ESTADO_ERROR_ENVIO, ESTADO_ERROR_GENERACION):
         flash(
-            "Tu pago fue recibido, pero hubo un problema al generar o enviar el PDF. "
-            "Te contactaremos para resolverlo. Si más tarde no ves nuestros correos, revisa también spam/correo no deseado.",
-            "error",
+            "Tu pago fue recibido y tu pedido está en preparación. "
+            "Te enviaremos novedades por correo; revisa también spam/correo no deseado.",
+            "info",
         )
         return
 
@@ -925,7 +1005,7 @@ def _sincronizar_post_pago_desde_return_stripe(pedido_id: int, stripe_session_id
 
     if row["estado"] != ESTADO_PENDIENTE_PAGO:
         flash(
-            "Tu pedido está registrado y en revisión. Te enviaremos novedades por correo. "
+            "Tu pedido está registrado y en preparación. Te enviaremos novedades por correo. "
             "Si no lo encuentras, revisa también spam/correo no deseado.",
             "info",
         )
@@ -1021,11 +1101,13 @@ def gracias():
 
     codigo_confirmacion = _codigo_confirmacion_visible(pedido_id_final, stripe_session_id)
     pedido = database.get_pedido_by_id(pedido_id_final) if pedido_id_final else None
+    customer_status = _customer_order_status(pedido)
 
     return render_template(
         "gracias.html",
         pedido_id=pedido_id_final,
         pedido=pedido,
+        customer_status=customer_status,
         etiqueta_estado=etiqueta_estado,
         codigo_confirmacion=codigo_confirmacion,
     )
@@ -1449,17 +1531,30 @@ def admin_impresos():
 @admin_required
 def admin_analiticas():
     """Analiticas internas de visitas, checkout, compras y ganancia."""
-    try:
-        days = int(request.args.get("dias", 14))
-    except ValueError:
-        days = 14
-    resumen = database.get_analytics_summary(days=days)
+    periodo = (request.args.get("periodo") or "mes").strip().lower()
+    config = _analytics_period_config(periodo)
+    resumen = database.get_analytics_summary(
+        days=int(config["days"]),
+        period_key=str(config["key"]),
+        since_date=config["since"],
+    )
     return render_template(
         "admin/analiticas.html",
         resumen=resumen,
+        periodo=config,
         current_tab="analiticas",
         format_usd_centavos=database.format_usd_centavos,
     )
+
+
+@bp.route("/admin/analiticas/reset", methods=["POST"])
+@admin_required
+def admin_analiticas_reset():
+    periodo = (request.form.get("periodo") or "mes").strip().lower()
+    config = _analytics_period_config(periodo)
+    database.reset_analytics_counter(str(config["key"]))
+    flash(f"Contador reiniciado para: {config['label']}. Los datos anteriores quedan guardados, pero este balance empieza desde ahora.", "success")
+    return redirect(url_for("main.admin_analiticas", periodo=config["key"]))
 
 
 @bp.route("/admin/resenas")

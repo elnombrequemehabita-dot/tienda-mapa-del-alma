@@ -116,6 +116,43 @@
           </div>
         {% endif %}
 
+        {% if pedido["tipo_producto"] == "impreso" %}
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-md-6">
+              <div class="product-card h-100">
+                <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">
+                  Parte digital
+                </h2>
+                <p class="small text-muted mb-2">Control independiente del PDF incluido con el libro físico.</p>
+                <dl class="row mb-0 small">
+                  <dt class="col-sm-5 text-muted">PDF</dt>
+                  <dd class="col-sm-7">{{ "Generado" if pedido["pdf_path"] or pedido["pdf_url"] else "Pendiente" }}</dd>
+                  <dt class="col-sm-5 text-muted">Drive</dt>
+                  <dd class="col-sm-7">{{ pedido["drive_status"] or "—" }}</dd>
+                  <dt class="col-sm-5 text-muted">Expira</dt>
+                  <dd class="col-sm-7 mono-small">{{ pedido["drive_expires_at"] or "—" }}</dd>
+                </dl>
+              </div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="product-card h-100">
+                <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">
+                  Parte impresa
+                </h2>
+                <p class="small text-muted mb-2">Control manual de impresión, tracking y entrega física.</p>
+                <dl class="row mb-0 small">
+                  <dt class="col-sm-5 text-muted">Impreso</dt>
+                  <dd class="col-sm-7 mono-small">{{ pedido["printed_at"] or "Pendiente" }}</dd>
+                  <dt class="col-sm-5 text-muted">Enviado</dt>
+                  <dd class="col-sm-7 mono-small">{{ pedido["shipped_at"] or "Pendiente" }}</dd>
+                  <dt class="col-sm-5 text-muted">Tracking</dt>
+                  <dd class="col-sm-7 mono-small">{{ pedido["tracking_number"] or "—" }}</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+
         <div class="product-card mb-3">
           <h2 class="h5 mb-3" style="font-family: var(--font-display); color: var(--color-primary-dark)">
             Técnico / entrega
