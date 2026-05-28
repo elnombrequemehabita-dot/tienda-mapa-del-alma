@@ -296,18 +296,34 @@ def _copy_column_if_empty(table: str, target: str, source: str) -> None:
     if target not in columns or source not in columns:
         return
 
-    if _column_accepts_empty_string(table, target):
+    target_accepts_empty = _column_accepts_empty_string(table, target)
+    source_accepts_empty = _column_accepts_empty_string(table, source)
+
+    if _use_postgres() and not target_accepts_empty and source_accepts_empty:
+        logger.info(
+            "DB_MIGRATION_COPY_SKIPPED table=%s target=%s source=%s reason=text_to_typed_column",
+            table,
+            target,
+            source,
+        )
+        return
+
+    assignment_expr = source
+    if _use_postgres() and target_accepts_empty and not source_accepts_empty:
+        assignment_expr = f"{source}::text"
+
+    if target_accepts_empty:
         target_empty = f"({target} IS NULL OR {target} = '')"
     else:
         target_empty = f"{target} IS NULL"
 
-    if _column_accepts_empty_string(table, source):
+    if source_accepts_empty:
         source_present = f"({source} IS NOT NULL AND {source} != '')"
     else:
         source_present = f"{source} IS NOT NULL"
 
     _execute(
-        f"UPDATE {table} SET {target} = {source} "
+        f"UPDATE {table} SET {target} = {assignment_expr} "
         f"WHERE {target_empty} "
         f"AND {source_present}"
     )
