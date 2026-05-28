@@ -119,14 +119,25 @@ def check_core_env(strict_live: bool) -> None:
         else:
             _ok("MAX_CONTENT_LENGTH", str(max_content_int))
 
-    token_hours = _env("PDF_DOWNLOAD_TOKEN_MAX_AGE_HOURS") or "72"
+    drive_hours = _env("DRIVE_EXPIRACION_HORAS") or "48"
+    try:
+        drive_hours_int = int(drive_hours)
+    except ValueError:
+        _fail("DRIVE_EXPIRACION_HORAS", "debe ser número")
+    else:
+        if drive_hours_int != 48:
+            _warn("DRIVE_EXPIRACION_HORAS", "la tienda debe comunicar el mismo plazo que configura Drive; recomendado 48")
+        else:
+            _ok("DRIVE_EXPIRACION_HORAS", "48h")
+
+    token_hours = _env("PDF_DOWNLOAD_TOKEN_MAX_AGE_HOURS") or "48"
     try:
         token_hours_int = int(token_hours)
     except ValueError:
         _fail("PDF_DOWNLOAD_TOKEN_MAX_AGE_HOURS", "debe ser número")
     else:
-        if token_hours_int > 168:
-            _warn("PDF_DOWNLOAD_TOKEN_MAX_AGE_HOURS", "recomendado 168 horas o menos")
+        if token_hours_int != 48:
+            _warn("PDF_DOWNLOAD_TOKEN_MAX_AGE_HOURS", "recomendado 48 para coincidir con Drive")
         else:
             _ok("PDF_DOWNLOAD_TOKEN_MAX_AGE_HOURS", f"{token_hours_int}h")
 

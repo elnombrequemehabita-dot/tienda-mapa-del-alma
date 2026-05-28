@@ -309,9 +309,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "pt": "Confirmo que os dados estão corretos e entendo que este formulário é o primeiro passo do meu pedido de Mapa da Alma em O Nome Que Habita Em Mim. Autorizo o uso dessas informações para criar meu conteúdo personalizado.",
     },
     "pedido.confirm_digital": {
-        "es": "Entiendo que se trata de un producto digital personalizado, por lo que no se aceptan cambios, cancelaciones ni reembolsos una vez confirmado el pedido e iniciado el proceso de creación.",
-        "en": "I understand this is a personalized digital product, so changes, cancellations, or refunds are not accepted once the order is confirmed and creation has started.",
-        "pt": "Entendo que se trata de um produto digital personalizado, portanto não são aceitas alterações, cancelamentos ou reembolsos após a confirmação do pedido e início do processo de criação.",
+        "es": "Entiendo que se trata de un producto digital personalizado. El enlace de descarga estará activo durante 48 horas y luego el PDF se eliminará de Google Drive por seguridad y privacidad. No se aceptan cambios, cancelaciones ni reembolsos una vez confirmado el pedido e iniciado el proceso de creación.",
+        "en": "I understand this is a personalized digital product. The download link will stay active for 48 hours and then the PDF will be deleted from Google Drive for security and privacy. Changes, cancellations, or refunds are not accepted once the order is confirmed and creation has started.",
+        "pt": "Entendo que se trata de um produto digital personalizado. O link de download ficará ativo por 48 horas e depois o PDF será removido do Google Drive por segurança e privacidade. Não são aceitas alterações, cancelamentos ou reembolsos após a confirmação do pedido e início da criação.",
     },
     "pedido.submit": {"es": "Enviar pedido", "en": "Submit order", "pt": "Enviar pedido"},
     "pedido.back": {"es": "Volver al inicio", "en": "Back to home", "pt": "Voltar ao início"},

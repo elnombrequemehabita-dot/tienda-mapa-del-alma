@@ -1,11 +1,16 @@
 import os
 import logging
+import threading
+import time
 from flask import Flask, redirect, render_template, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app import db as database
 
 logger = logging.getLogger(__name__)
+
+_drive_cleanup_lock = threading.Lock()
+_drive_cleanup_last_started = 0.0
 
 
 def _bool_env(name: str, default: bool = False) -> bool:
@@ -37,7 +42,7 @@ TRANSLATIONS_ES = {
     "nav.contact": "Contacto",
 
     "ticker.top": "Mapa del Alma personalizado · Entrega digital por email · Pago seguro con Stripe · Tu historia, escrita solo para ti",
-    "ticker.bottom": "Producto digital personalizado · Link de descarga activo por 3 días · Revisa bien tus datos antes de comprar",
+    "ticker.bottom": "Producto digital personalizado · Link de descarga activo por 48 horas · Revisa bien tus datos antes de comprar",
 
     "index.title": "Mapa del Alma personalizado · El Nombre Que Me Habita",
     "index.hero.price.name": "Mapa del Alma personalizado",
@@ -64,12 +69,12 @@ TRANSLATIONS_ES = {
     "pedido.form_of_address_optional": "opcional",
     "pedido.form_of_address_placeholder": "Selecciona una opción",
     "pedido.confirm_data": "Confirmo que revisé mi nombre, apellidos, fecha de nacimiento y correo. Entiendo que estos datos se usarán para crear mi contenido personalizado.",
-    "pedido.confirm_digital": "Acepto que es un producto digital personalizado. Una vez iniciado el proceso de creación, no se realizan cambios, cancelaciones ni reembolsos.",
+    "pedido.confirm_digital": "Acepto que es un producto digital personalizado. Entiendo que el enlace de descarga estará activo por 48 horas y que luego el PDF se eliminará de Google Drive por seguridad y privacidad. Una vez iniciado el proceso de creación, no se realizan cambios, cancelaciones ni reembolsos.",
     "pedido.submit": "Continuar al pago seguro",
     "pedido.back": "Volver al inicio",
     "pedido.terms": "Términos y condiciones",
     "pedido.privacy": "Política de privacidad",
-    "pedido.digital_notice": "Producto digital personalizado · Entrega por email · Link activo por 3 días",
+    "pedido.digital_notice": "Producto digital personalizado · Entrega por email · Link activo por 48 horas",
     "pedido.secure_payment": "Pago seguro con Stripe",
     "pedido.required_note": "Los campos obligatorios deben completarse correctamente antes de continuar.",
     "pedido.no_refund_notice": "Por ser una creación personalizada, revisa bien tus datos antes de pagar.",
@@ -144,6 +149,43 @@ def _install_template_helpers(app: Flask) -> None:
             "support_email": support_email,
             "public_base_url": app.config.get("PUBLIC_BASE_URL", ""),
         }
+
+
+def _install_drive_cleanup_scheduler(app: Flask) -> None:
+    cleanup_default = bool((os.getenv("DATABASE_URL") or "").strip())
+    if not _bool_env("DRIVE_CLEANUP_ON_REQUEST", cleanup_default):
+        return
+
+    interval_seconds = max(300, _int_env("DRIVE_CLEANUP_INTERVAL_SECONDS", 3600))
+
+    @app.before_request
+    def _maybe_schedule_drive_cleanup():
+        global _drive_cleanup_last_started
+
+        if app.config.get("DISABLE_GOOGLE_DRIVE"):
+            return None
+
+        now = time.time()
+        if now - _drive_cleanup_last_started < interval_seconds:
+            return None
+
+        with _drive_cleanup_lock:
+            if now - _drive_cleanup_last_started < interval_seconds:
+                return None
+            _drive_cleanup_last_started = now
+
+        def _run_cleanup() -> None:
+            with app.app_context():
+                try:
+                    database.init_db()
+                    from app.drive_cleanup import limpiar_drive_expirados
+
+                    limpiar_drive_expirados(limit=200, enviar_resumen=True)
+                except Exception:
+                    logger.exception("Limpieza automática de Drive falló.")
+
+        threading.Thread(target=_run_cleanup, name="drive-cleanup-48h", daemon=True).start()
+        return None
 
 
 def create_app():
@@ -247,6 +289,7 @@ def create_app():
 
     try:
         database.init_app(app)
+        _install_drive_cleanup_scheduler(app)
         logger.info("Base de datos registrada para inicialización diferida.")
     except Exception as e:
         logger.exception("Error registrando inicialización de base de datos: %s", e)

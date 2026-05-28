@@ -50,7 +50,7 @@
             />
             <span>
               <strong>Solo PDF Digital</strong>
-              <small>Entrega inmediata por correo electrónico.</small>
+              <small>Entrega por correo electrónico. El enlace de descarga estará activo durante 48 horas.</small>
             </span>
           </label>
 
@@ -63,7 +63,7 @@
             />
             <span>
               <strong>Libro Impreso + PDF Digital incluido</strong>
-              <small>Incluye el PDF digital y envío físico dentro de Estados Unidos. Precio: {{ precio_impreso }} USD.</small>
+              <small>Incluye PDF digital con enlace activo 48 horas y envío físico dentro de Estados Unidos. Precio: {{ precio_impreso }} USD.</small>
             </span>
           </label>
         </div>
@@ -221,6 +221,11 @@
           {{ t('pedido.confirm_digital') }}
         </label>
       </div>
+
+      <p class="form-text mt-2 mb-0">
+        Por seguridad y privacidad, el archivo digital se elimina de Google Drive después de 48 horas.
+        Descarga tu PDF cuando recibas el correo y guárdalo en tu dispositivo o nube personal.
+      </p>
 
       <div class="d-grid gap-2 mt-3">
         <button class="btn-primary-lg w-100 border-0" id="pedido-submit" type="submit">{{ t('pedido.submit') }}</button>

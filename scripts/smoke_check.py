@@ -474,6 +474,8 @@ def check_routes() -> None:
         response = client.get(path)
         if response.status_code != 200:
             raise SystemExit(f"[FAIL] {path} devolvio {response.status_code}")
+        if path == "/pedido" and b"48 horas" not in response.data:
+            raise SystemExit("[FAIL] /pedido no informa que el enlace de descarga dura 48 horas")
 
     with client.session_transaction() as session:
         session["admin_ok"] = True
@@ -529,6 +531,24 @@ def check_security_guards() -> None:
         raise SystemExit(f"[FAIL] admin POST con CSRF devolvio {ok_csrf.status_code}")
 
     _ok("seguridad rutas", "descarga firmada y CSRF admin")
+
+
+def check_customer_email_texts() -> None:
+    from app.email_service import _build_customer_pago_confirmado_body, _build_customer_body
+
+    pedido = {
+        "id": 123,
+        "nombre": "Valentina",
+        "apellidos": "Garcia",
+        "email": "valentina@example.com",
+    }
+    pago_body = _build_customer_pago_confirmado_body(pedido)
+    entrega_body = _build_customer_body(pedido, "https://example.com/pdf", "https://example.com/resena")
+    if "48 horas" not in pago_body or "Google Drive" not in pago_body:
+        raise SystemExit("[FAIL] email de pago no informa vencimiento 48h/Drive")
+    if "48 horas" not in entrega_body or "Google Drive" not in entrega_body:
+        raise SystemExit("[FAIL] email de entrega no informa vencimiento 48h/Drive")
+    _ok("emails cliente", "avisan enlace 48h y eliminación Drive")
 
 
 def check_pdf_generation() -> None:
@@ -595,6 +615,7 @@ def main() -> int:
     check_checkout_printed_international_block()
     check_routes()
     check_security_guards()
+    check_customer_email_texts()
     check_pdf_generation()
     print("[OK] smoke check completo")
     return 0

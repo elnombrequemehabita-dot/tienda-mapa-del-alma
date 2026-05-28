@@ -36,6 +36,22 @@ SUBJECT_CUSTOMER_PAYMENT = "Pago recibido - estamos creando tu Mapa del Alma (pe
 SUBJECT_CUSTOMER_PDF = "Tu Mapa del Alma esta listo (pedido #{order_id})"
 
 
+def _download_expiration_hours() -> int:
+    try:
+        return max(1, int(os.environ.get("DRIVE_EXPIRACION_HORAS", "48")))
+    except (TypeError, ValueError):
+        return 48
+
+
+def _download_expiration_text() -> str:
+    hours = _download_expiration_hours()
+    return (
+        f"El enlace de descarga estará activo durante {hours} horas desde el envío del PDF. "
+        "Después de ese plazo, el archivo digital se eliminará de Google Drive por seguridad y privacidad. "
+        "Descárgalo y guárdalo en tu dispositivo o nube personal."
+    )
+
+
 def _email_sender() -> str:
     return (os.environ.get("EMAIL_SENDER") or _DEFAULT_SENDER).strip()
 
@@ -145,7 +161,7 @@ def _build_customer_pago_confirmado_body(pedido: Any) -> str:
         "Próximo paso:",
         "- Cuando tu PDF esté listo, recibirás otro correo con el enlace directo de descarga.",
         "- Revisa también Spam, Promociones o Correo no deseado por si el mensaje llega allí.",
-        "- El enlace de descarga estará activo por tiempo limitado según las condiciones de la tienda.",
+        f"- {_download_expiration_text()}",
         "",
         "Resumen de tu pedido:",
         f"- Pedido: {codigo}",
@@ -161,6 +177,7 @@ def _build_customer_pago_confirmado_html(pedido: Any) -> str:
     nombre = _get(pedido, "nombre") or "alma bonita"
     codigo = _codigo_pedido(pedido)
     full_name = _nombre_completo(pedido)
+    expiration_text = _download_expiration_text()
 
     return f"""
 <div style="font-family:Arial,Helvetica,sans-serif;color:#2f2a36;line-height:1.6;">
@@ -173,7 +190,8 @@ def _build_customer_pago_confirmado_html(pedido: Any) -> str:
   <div style="background:#f5f7ff;border:1px solid #dbe4ff;border-radius:12px;padding:14px 16px;margin:16px 0;">
     <p style="margin:0 0 8px;"><strong>Próximo paso:</strong></p>
     <p style="margin:0 0 6px;">Cuando tu PDF esté listo, recibirás otro correo con el enlace directo de descarga.</p>
-    <p style="margin:0;">Revisa también Spam, Promociones o Correo no deseado.</p>
+    <p style="margin:0 0 6px;">Revisa también Spam, Promociones o Correo no deseado.</p>
+    <p style="margin:0;">{expiration_text}</p>
   </div>
 
   <div style="background:#faf7fd;border:1px solid #e7ddf2;border-radius:10px;padding:12px 14px;margin:0 0 16px;">
@@ -251,6 +269,8 @@ def _build_customer_body(pedido: Any, pdf_url: str, resena_url: str) -> str:
         "Puedes descargarlo aquí:",
         pdf_url,
         "",
+        _download_expiration_text(),
+        "",
         "Tu experiencia puede ayudar a otras personas a descubrir su propio Mapa del Alma ✨",
         "",
         "Si este libro tocó tu corazón, te hizo reflexionar o te ayudó a conectar contigo misma(o), me haría muy feliz que dejaras tu reseña aquí:",
@@ -269,6 +289,7 @@ def _build_customer_html_body(pedido: Any, pdf_url: str, resena_url: str) -> str
     nombre = _get(pedido, "nombre") or "alma bonita"
     full_name = _nombre_completo(pedido)
     codigo = _codigo_pedido(pedido)
+    expiration_text = _download_expiration_text()
 
     return f"""
 <div style="font-family:Arial,Helvetica,sans-serif;color:#2f2a36;line-height:1.55;">
@@ -276,6 +297,9 @@ def _build_customer_html_body(pedido: Any, pdf_url: str, resena_url: str) -> str
   <p style="margin:0 0 14px;">Hola {nombre},</p>
   <p style="margin:0 0 12px;">Puedes descargarlo aquí:</p>
   <p style="margin:0 0 16px;"><a href="{pdf_url}">{pdf_url}</a></p>
+  <div style="background:#fff8e6;border:1px solid #f2d69b;border-radius:10px;padding:12px 14px;margin:0 0 16px;">
+    <p style="margin:0;"><strong>Importante:</strong> {expiration_text}</p>
+  </div>
   <p style="margin:0 0 12px;">Tu experiencia puede ayudar a otras personas a descubrir su propio Mapa del Alma ✨</p>
   <p style="margin:0 0 12px;">Si este libro tocó tu corazón, te hizo reflexionar o te ayudó a conectar contigo misma(o), me haría muy feliz que dejaras tu reseña aquí:</p>
   <p style="margin:0 0 16px;"><a href="{resena_url}">{resena_url}</a></p>

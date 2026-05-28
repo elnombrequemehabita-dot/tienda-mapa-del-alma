@@ -22,7 +22,13 @@ services:
       - key: MAX_CONTENT_LENGTH
         value: "1000000"
       - key: PDF_DOWNLOAD_TOKEN_MAX_AGE_HOURS
-        value: "72"
+        value: "48"
+      - key: DRIVE_EXPIRACION_HORAS
+        value: "48"
+      - key: DRIVE_CLEANUP_ON_REQUEST
+        value: "1"
+      - key: DRIVE_CLEANUP_INTERVAL_SECONDS
+        value: "3600"
       - key: ALLOW_DEV_SECRET_KEY
         value: "0"
       - key: OPENAI_MODEL

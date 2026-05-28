@@ -161,7 +161,7 @@ Tienda_El_Nombre_Que_Me_Habita/
 
 ## Mantenimiento
 
-Los enlaces de Google Drive expiran a las 72 horas. Para limpiar PDFs vencidos:
+Los enlaces de Google Drive expiran a las 48 horas. En Render la app dispara limpieza periódica automática (`DRIVE_CLEANUP_ON_REQUEST=1`) y también puedes limpiar manualmente:
 
 - Desde admin: botón **Limpiar Drive** en la pestaña Pedidos.
 - Desde consola/cron:

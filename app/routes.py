@@ -367,7 +367,7 @@ def _crear_checkout_desde_form():
         )
     if not acepta_digital:
         errores.append(
-            "Debes marcar la casilla que acepta las condiciones del producto digital (sin cambios, cancelaciones ni reembolsos tras iniciar la creación)."
+            "Debes marcar la casilla que acepta las condiciones del producto digital: enlace activo por 48 horas, eliminación posterior de Google Drive y sin cambios, cancelaciones ni reembolsos tras iniciar la creación."
         )
     if es_regalo and len(dedicatoria) > 500:
         errores.append("La dedicatoria debe tener 500 caracteres o menos.")
@@ -1305,7 +1305,7 @@ def admin_pedidos():
 def admin_limpiar_drive_expirados():
     """Ejecuta manualmente la limpieza de PDFs vencidos en Google Drive."""
     try:
-        from scripts.limpiar_drive_expirados import limpiar_drive_expirados
+        from app.drive_cleanup import limpiar_drive_expirados
 
         resultado = limpiar_drive_expirados(limit=200, enviar_resumen=False)
     except Exception as exc:  # noqa: BLE001

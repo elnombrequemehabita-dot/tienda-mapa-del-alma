@@ -14,9 +14,9 @@ _SALT = "mapa-alma-descargas-v1"
 
 def _max_age_sec() -> int:
     try:
-        horas = int(os.getenv("PDF_DOWNLOAD_TOKEN_MAX_AGE_HOURS", "72"))
+        horas = int(os.getenv("PDF_DOWNLOAD_TOKEN_MAX_AGE_HOURS", "48"))
     except (TypeError, ValueError):
-        horas = 72
+        horas = 48
     return max(1, horas) * 3600
 
 

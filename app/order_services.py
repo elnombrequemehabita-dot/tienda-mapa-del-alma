@@ -90,7 +90,10 @@ logger = logging.getLogger(__name__)
 
 ESTADO_ERROR = ESTADO_ERROR_GENERACION
 
-DRIVE_EXPIRACION_HORAS = 72
+try:
+    DRIVE_EXPIRACION_HORAS = max(1, int(os.getenv("DRIVE_EXPIRACION_HORAS", "48")))
+except (TypeError, ValueError):
+    DRIVE_EXPIRACION_HORAS = 48
 LOCK_STALE_MINUTES = 45
 
 
