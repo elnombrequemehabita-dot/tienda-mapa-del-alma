@@ -256,14 +256,60 @@ def _table_columns(table: str) -> set[str]:
     return {str(row["name"]) for row in rows}
 
 
+def _column_type(table: str, column: str) -> str:
+    if _use_postgres():
+        rows = _fetchall(
+            """
+            SELECT data_type
+            FROM information_schema.columns
+            WHERE table_name = ? AND column_name = ?
+            """,
+            (table, column),
+        )
+        if rows:
+            return str(rows[0]["data_type"]).lower()
+        return ""
+
+    rows = _fetchall(f"PRAGMA table_info({table})")
+    for row in rows:
+        if str(row["name"]) == column:
+            return str(row["type"] or "").lower()
+    return ""
+
+
+def _column_accepts_empty_string(table: str, column: str) -> bool:
+    if not _use_postgres():
+        return True
+
+    column_type = _column_type(table, column)
+    return column_type in {
+        "text",
+        "character varying",
+        "character",
+        "varchar",
+        "char",
+    }
+
+
 def _copy_column_if_empty(table: str, target: str, source: str) -> None:
     columns = _table_columns(table)
     if target not in columns or source not in columns:
         return
+
+    if _column_accepts_empty_string(table, target):
+        target_empty = f"({target} IS NULL OR {target} = '')"
+    else:
+        target_empty = f"{target} IS NULL"
+
+    if _column_accepts_empty_string(table, source):
+        source_present = f"({source} IS NOT NULL AND {source} != '')"
+    else:
+        source_present = f"{source} IS NOT NULL"
+
     _execute(
         f"UPDATE {table} SET {target} = {source} "
-        f"WHERE ({target} IS NULL OR {target} = '') "
-        f"AND ({source} IS NOT NULL AND {source} != '')"
+        f"WHERE {target_empty} "
+        f"AND {source_present}"
     )
 
 
@@ -308,12 +354,17 @@ def _migrate_resena_aliases() -> None:
         fallback_parts = ["actualizado_en"]
         if "creado_en" in columns:
             fallback_parts.append("creado_en")
-        if "created_at" in columns:
+        if "created_at" in columns and (
+            not _use_postgres() or not _column_accepts_empty_string("resenas", "created_at")
+        ):
             fallback_parts.append("created_at")
         fallback_parts.append("CURRENT_TIMESTAMP")
+        where_empty = "actualizado_en IS NULL"
+        if _column_accepts_empty_string("resenas", "actualizado_en"):
+            where_empty = "actualizado_en IS NULL OR actualizado_en = ''"
         _execute(
             f"UPDATE resenas SET actualizado_en = COALESCE({', '.join(fallback_parts)}) "
-            "WHERE actualizado_en IS NULL OR actualizado_en = ''"
+            f"WHERE {where_empty}"
         )
 
 
